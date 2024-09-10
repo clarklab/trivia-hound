@@ -114,7 +114,7 @@
                 categoriesContainer.innerHTML = '';
                 categories.forEach(category => {
                     const categoryElement = document.createElement('button');
-                    categoryElement.classList.add('flex', 'items-center', 'bg-black', 'font-bold', 'text-white', 'px-6', 'py-6', 'rounded-lg', 'hover:bg-gray-700', 'space-x-4');
+                    categoryElement.classList.add('flex', 'items-center', 'bg-black', 'font-bold', 'text-white', 'px-5', 'py-6', 'rounded-lg', 'hover:bg-gray-700', 'space-x-3');
                     categoryElement.onclick = () => {
                         selectedCategoryId = category.id;
                         selectedCategoryName = category.name;  // Store category name
@@ -169,7 +169,7 @@
                 questionList.innerHTML = '';
                 questions.forEach((question, index) => {
                     const questionItem = document.createElement('li');
-                    questionItem.classList.add('p-4', 'bg-gray-200', 'rounded-lg', 'pop-animation', 'cursor-pointer');
+                    questionItem.classList.add('p-6', 'bg-gray-200', 'rounded-lg', 'pop-animation', 'cursor-pointer');
 
                     const questionText = document.createElement('p');
                     questionText.innerHTML = decodeHTML(question.question);
