@@ -114,7 +114,7 @@
                 categoriesContainer.innerHTML = '';
                 categories.forEach(category => {
                     const categoryElement = document.createElement('button');
-                    categoryElement.classList.add('flex', 'items-center', 'bg-black', 'font-bold', 'text-white', 'px-5', 'py-6', 'rounded-lg', 'hover:bg-gray-700', 'space-x-3');
+                    categoryElement.classList.add('flex', 'items-center', 'bg-black', 'font-bold', 'text-white', 'px-4', 'py-6', 'rounded-lg', 'hover:bg-gray-700', 'space-x-3');
                     categoryElement.onclick = () => {
                         selectedCategoryId = category.id;
                         selectedCategoryName = category.name;  // Store category name
