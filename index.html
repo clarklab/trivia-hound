@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Hound</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;600;700;900&display=swap" rel="stylesheet">
+    <link href="favicon.svg" rel="icon" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+
+    <style>
+        .pop-animation {
+            transition: transform 0.2s ease;
+        }
+        .pop-animation:active {
+            transform: scale(1.05);
+        }
+    </style>
+
+</head>
+<body class="bg-white text-gray-800 font-sans" style="font-family: 'Inter', sans-serif;">
+
+    <!-- Unified Top Bar -->
+    <div id="topBar" class="bg-black text-white p-4 flex items-center space-x-2">
+        <!-- Back Button (Hidden by Default) -->
+        <button id="backBtn" class="bg-white text-black h-8 w-8 rounded-full flex items-center justify-center hover:bg-blue-600 hidden">
+            <span class="material-icons">arrow_back</span>
+        </button>
+
+        <!-- App Title or Category Title (Dynamically Updated) -->
+        <h1 id="titleText" class="text-2xl font-bold text-center flex-grow">Trivia Hound</h1>
+
+        <!-- Shuffle Button (Hidden by Default) -->
+        <button id="shuffleBtn" class="bg-white text-black h-8 w-8 rounded-full flex items-center justify-center hover:bg-green-600 hidden">
+            <span class="material-icons">shuffle</span>
+        </button>
+    </div>
+
+    <!-- Container for Categories and Questions -->
+    <div id="app" class="max-w-5xl mx-auto p-8">
+
+        <!-- Categories Section -->
+        <div id="categories" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Categories will be injected here by JavaScript -->
+        </div>
+
+        <!-- Questions Section (Hidden Initially) -->
+        <div id="questions" class="hidden">
+
+            <ul id="questionList" class="space-y-4">
+                <!-- Questions will be injected here by JavaScript -->
+            </ul>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const categoriesContainer = document.getElementById('categories');
+            const questionsContainer = document.getElementById('questions');
+            const questionList = document.getElementById('questionList');
+            const backBtn = document.getElementById('backBtn');
+            const shuffleBtn = document.getElementById('shuffleBtn');
+            const titleText = document.getElementById('titleText');
+
+            let selectedCategoryId = null;
+            let selectedCategoryName = '';
+            let shuffleCooldown = false;
+
+            // Updated categories with simplified names and corresponding icons
+            const categories = [
+                {"id":9,"name":"General", "icon": "help"},
+                {"id":10,"name":"Books", "icon": "menu_book"},
+                {"id":11,"name":"Film", "icon": "movie"},
+                {"id":12,"name":"Music", "icon": "music_note"},
+                {"id":13,"name":"Theatre", "icon": "theater_comedy"},
+                {"id":14,"name":"Television", "icon": "tv"},
+                {"id":15,"name":"Video Games", "icon": "sports_esports"},
+                {"id":16,"name":"Board Games", "icon": "extension"},
+                {"id":17,"name":"Science", "icon": "science"},
+                {"id":18,"name":"Computers", "icon": "computer"},
+                {"id":19,"name":"Mathematics", "icon": "calculate"},
+                {"id":20,"name":"Mythology", "icon": "auto_stories"},
+                {"id":21,"name":"Sports", "icon": "sports"},
+                {"id":22,"name":"Geography", "icon": "public"},
+                {"id":23,"name":"History", "icon": "history"},
+                {"id":24,"name":"Politics", "icon": "gavel"},
+                {"id":25,"name":"Art", "icon": "palette"},
+                {"id":26,"name":"Celebrities", "icon": "star"},
+                {"id":27,"name":"Animals", "icon": "pets"},
+                {"id":28,"name":"Vehicles", "icon": "directions_car"},
+                {"id":29,"name":"Comics", "icon": "menu_book"},
+                {"id":30,"name":"Gadgets", "icon": "devices"},
+                {"id":31,"name":"Anime", "icon": "mood"},
+                {"id":32,"name":"Cartoons", "icon": "animation"}
+            ];
+
+            // Function to show categories
+            function displayCategories() {
+                titleText.textContent = "Trivia Hound";  // Set title to app name
+                backBtn.classList.add('hidden');  // Hide back button
+                shuffleBtn.classList.add('hidden');  // Hide shuffle button
+                categoriesContainer.classList.remove('hidden');  // Show categories
+                questionsContainer.classList.add('hidden');  // Hide questions
+
+                categoriesContainer.innerHTML = '';
+                categories.forEach(category => {
+                    const categoryElement = document.createElement('button');
+                    categoryElement.classList.add('flex', 'items-center', 'bg-black', 'font-bold', 'text-white', 'px-6', 'py-6', 'rounded-lg', 'hover:bg-gray-700', 'space-x-4');
+                    categoryElement.onclick = () => {
+                        selectedCategoryId = category.id;
+                        selectedCategoryName = category.name;  // Store category name
+                        fetchQuestions(selectedCategoryId, selectedCategoryName);
+                    };
+
+                    // Add icon and category name
+                    const iconElement = document.createElement('span');
+                    iconElement.classList.add('material-icons');
+                    iconElement.textContent = category.icon;
+
+                    const textElement = document.createElement('span');
+                    textElement.textContent = category.name;
+
+                    categoryElement.appendChild(iconElement);
+                    categoryElement.appendChild(textElement);
+
+                    categoriesContainer.appendChild(categoryElement);
+                });
+            }
+
+            // Function to fetch questions from the API
+            async function fetchQuestions(categoryId, categoryName) {
+                try {
+                    const url = `https://opentdb.com/api.php?amount=10&category=${categoryId}`;
+                    const response = await fetch(url);
+
+                    if (response.status === 429) {
+                        alert('Too many requests! Please wait a few seconds before trying again.');
+                        return;
+                    }
+
+                    const data = await response.json();
+                    if (data.response_code !== 0 || !data.results) {
+                        throw new Error('No results or API limit reached.');
+                    }
+
+                    // Update title to category name and show buttons
+                    titleText.textContent = categoryName;
+                    backBtn.classList.remove('hidden');
+                    shuffleBtn.classList.remove('hidden');
+
+                    displayQuestions(data.results);
+                } catch (error) {
+                    console.error('Error fetching questions:', error);
+                    alert('Failed to load questions. Please try again later.');
+                }
+            }
+
+            // Function to display questions
+            function displayQuestions(questions) {
+                questionList.innerHTML = '';
+                questions.forEach((question, index) => {
+                    const questionItem = document.createElement('li');
+                    questionItem.classList.add('p-4', 'bg-gray-200', 'rounded-lg', 'pop-animation', 'cursor-pointer');
+
+                    const questionText = document.createElement('p');
+                    questionText.innerHTML = decodeHTML(question.question);
+                    questionItem.appendChild(questionText);
+
+                    const answers = [...question.incorrect_answers, question.correct_answer];
+                    shuffleArray(answers);
+
+                    const answerList = document.createElement('ul');
+                    answers.forEach(answer => {
+                        const answerItem = document.createElement('li');
+                        answerItem.innerHTML = decodeHTML(answer);
+                        answerItem.classList.add('cursor-pointer');
+
+                        answerList.appendChild(answerItem);
+                    });
+
+                    questionItem.appendChild(answerList);
+
+                    // Click event to reveal the correct answer and animate
+                    questionItem.addEventListener('click', () => {
+                        answerList.querySelectorAll('li').forEach(li => {
+                            li.classList.remove('font-bold');  // Remove bold from all
+                        });
+                        answerList.querySelectorAll('li').forEach(li => {
+                            if (li.innerHTML === decodeHTML(question.correct_answer)) {
+                                li.classList.add('font-bold');  // Bold only the correct answer
+                            }
+                        });
+                    });
+
+                    questionList.appendChild(questionItem);
+                });
+
+                categoriesContainer.classList.add('hidden');
+                questionsContainer.classList.remove('hidden');
+            }
+
+            // Back button to show categories
+            backBtn.onclick = () => {
+                displayCategories();  // Reset to categories view
+            };
+
+            // Shuffle button to get another 10 questions from the same category
+            shuffleBtn.onclick = () => {
+                if (selectedCategoryId && !shuffleCooldown) {
+                    shuffleCooldown = true;
+                    fetchQuestions(selectedCategoryId, selectedCategoryName);  // Use the stored category name
+                    // Add cooldown to prevent spamming
+                    setTimeout(() => {
+                        shuffleCooldown = false;
+                    }, 5000);
+                }
+            };
+
+            // Shuffle array helper function
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            // Decode HTML entities
+            function decodeHTML(html) {
+                const txt = document.createElement('textarea');
+                txt.innerHTML = html;
+                return txt.value;
+            }
+
+            // Initialize the app by displaying categories
+            displayCategories();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "Trivia Hound",
+  "short_name": "Trivia Hound",
+  "description": "Got that dog in ya?",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
