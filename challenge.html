@@ -86,22 +86,10 @@
 
         <!-- ===================== START SCREEN ===================== -->
         <section id="startScreen" class="flex-1 min-h-0 flex-col items-center justify-center text-center">
-            <div class="anim-bob mb-3"><span class="ms fill" style="font-size:84px;">interpreter_mode</span></div>
+            <div class="anim-bob mb-3"><span class="ms fill" style="font-size:84px;">indeterminate_question_box</span></div>
             <h2 class="text-4xl font-black leading-none mb-3">The Trivia<br>Challenge</h2>
             <p class="text-white/70 max-w-xs mb-1">Birds, '90s movies, music, animals &amp; Texas. Medium heat.</p>
             <p class="text-white/40 text-sm mb-8">Walk &amp; play. Unlock them all to win.</p>
-
-            <div class="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 mb-8 w-full max-w-xs flex items-center justify-between">
-                <div class="text-left">
-                    <div class="text-xs uppercase tracking-wider text-white/40">Best Run</div>
-                    <div id="bestStat" class="text-2xl font-black">—</div>
-                </div>
-                <div class="text-left">
-                    <div class="text-xs uppercase tracking-wider text-white/40">Locks</div>
-                    <div id="lenStat" class="text-2xl font-black">10</div>
-                </div>
-                <span class="ms anim-bob" style="font-size:40px;">stadia_controller</span>
-            </div>
 
             <button id="startBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs shadow-lg shadow-white/10 flex items-center justify-center gap-2">
                 <span class="ms fill" style="font-size:22px;">play_arrow</span> Let's Go!
@@ -246,9 +234,10 @@
         function setBest(b) { localStorage.setItem(BEST_KEY, JSON.stringify(b)); }
 
         function refreshStartStats() {
-            el('lenStat').textContent = settings.count;
-            const best = getBest();
-            el('bestStat').textContent = best ? `${best.score}/${best.total}` : '—';
+            // Start-screen stat chips were removed; best run is still tracked
+            // and shown on the end screen. Kept as a null-safe hook.
+            const len = el('lenStat'); if (len) len.textContent = settings.count;
+            const best = el('bestStat'); if (best) { const b = getBest(); best.textContent = b ? `${b.score}/${b.total}` : '—'; }
         }
 
         // ---------- Host banter (no emoji) ----------
