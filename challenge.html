@@ -259,6 +259,24 @@
             } catch {}
         }
         function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+
+        // ---------- Recently-seen questions (cross-game de-dupe) ----------
+        // Sent as `avoid` on every generation so new games don't repeat
+        // questions you saw recently.
+        const RECENT_KEY = 'th_challenge_recent';
+        const RECENT_CAP = 70;
+        function getRecent() { const r = loadJSON(RECENT_KEY, []); return Array.isArray(r) ? r : []; }
+        function pushRecent(items) {
+            const texts = (items || []).map((q) => q && q.question).filter(Boolean);
+            if (!texts.length) return;
+            const merged = getRecent().concat(texts);
+            const seen = new Set(), out = [];
+            for (let i = merged.length - 1; i >= 0; i--) { if (!seen.has(merged[i])) { seen.add(merged[i]); out.push(merged[i]); } }
+            out.reverse();
+            const capped = out.slice(Math.max(0, out.length - RECENT_CAP));
+            try { localStorage.setItem(RECENT_KEY, JSON.stringify(capped)); } catch {}
+        }
+
         function loadSession() {
             const s = loadJSON(SESSION_KEY, null);
             if (!s || !Array.isArray(s.questions) || !s.questions.length) return null;
@@ -441,9 +459,10 @@
             el('loadingQuip').textContent = pick(loadingQuips);
             const quipTimer = setInterval(() => { el('loadingQuip').textContent = pick(loadingQuips); }, 1800);
             try {
-                const raw = await fetchQuestions(settings.count);
+                const raw = await fetchQuestions(settings.count, getRecent());
                 clearInterval(quipTimer);
                 game = { questions: raw.map(normalize), idx: 0, score: 0, results: [] };
+                pushRecent(game.questions);
                 openingProgress();
             } catch (err) {
                 clearInterval(quipTimer);
@@ -452,8 +471,13 @@
         }
         function useFallback(err) {
             console.warn('Falling back to local questions:', err);
-            const bank = shuffle(FALLBACK_BANK).slice(0, settings.count);
+            const recent = new Set(getRecent());
+            // Prefer questions not seen recently; fall back to the full bank.
+            let pool = FALLBACK_BANK.filter((q) => !recent.has(q.question));
+            if (pool.length < settings.count) pool = FALLBACK_BANK.slice();
+            const bank = shuffle(pool).slice(0, settings.count);
             game = { questions: bank.map(normalize), idx: 0, score: 0, results: [] };
+            pushRecent(game.questions);
             openingProgress();
         }
         function openingProgress() {
@@ -591,11 +615,12 @@
             const swapBtn = el('swapBtn');
             swapBtn.innerHTML = '<span class="ms anim-spin" style="font-size:16px;">cached</span> swapping…';
             const currentCategory = game.questions[game.idx].category;
-            const avoid = game.questions.map((q) => q.question);
+            const avoid = game.questions.map((q) => q.question).concat(getRecent());
             try {
                 // Pull a brand-new question from a different category.
                 const [fresh] = await fetchQuestions(1, avoid, currentCategory);
                 game.questions[game.idx] = normalize(fresh);
+                pushRecent([fresh]);
                 showHost(`New category: ${fresh.category}!`, 'good');
             } catch (err) {
                 const used = new Set(game.questions.map((q) => q.question));
@@ -737,10 +762,11 @@
             extending = true;
             const target = game.questions.length + n;
             showHost(`Wranglin' up ${n} more…`, 'good', { duration: 4000 });
-            const avoid = game.questions.map((q) => q.question);
+            const avoid = game.questions.map((q) => q.question).concat(getRecent());
             try {
                 const fresh = await fetchQuestions(Math.min(n, 20), avoid);
                 fresh.forEach((q) => { if (game.questions.length < target) game.questions.push(normalize(q)); });
+                pushRecent(fresh);
             } catch (err) {
                 const used = new Set(game.questions.map((q) => q.question));
                 for (const c of shuffle(FALLBACK_BANK)) {
