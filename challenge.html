@@ -408,11 +408,11 @@
         let busy = false;
 
         // ---------- Question generation ----------
-        async function fetchQuestions(count, avoid) {
+        async function fetchQuestions(count, avoid, avoidCategory) {
             const res = await fetch('/api/questions', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ count, avoid: avoid || [] }),
+                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null }),
             });
             if (!res.ok) throw new Error('gen failed ' + res.status);
             const data = await res.json();
@@ -590,15 +590,18 @@
             Sound.play('ui');
             const swapBtn = el('swapBtn');
             swapBtn.innerHTML = '<span class="ms anim-spin" style="font-size:16px;">cached</span> swapping…';
+            const currentCategory = game.questions[game.idx].category;
             const avoid = game.questions.map((q) => q.question);
             try {
-                const [fresh] = await fetchQuestions(1, avoid);
+                // Pull a brand-new question from a different category.
+                const [fresh] = await fetchQuestions(1, avoid, currentCategory);
                 game.questions[game.idx] = normalize(fresh);
-                showHost("Fresh one, comin' up!", 'good');
+                showHost(`New category: ${fresh.category}!`, 'good');
             } catch (err) {
                 const used = new Set(game.questions.map((q) => q.question));
-                const cand = FALLBACK_BANK.find((q) => !used.has(q.question));
-                if (cand) { game.questions[game.idx] = normalize(cand); showHost("Here's another from the backup pile.", 'good'); }
+                const cand = FALLBACK_BANK.find((q) => !used.has(q.question) && q.category !== currentCategory)
+                    || FALLBACK_BANK.find((q) => !used.has(q.question));
+                if (cand) { game.questions[game.idx] = normalize(cand); showHost(`Here's a ${cand.category} one from the backup pile.`, 'good'); }
             } finally {
                 Sound.play('swap');
                 swapBtn.innerHTML = '<span class="ms" style="font-size:16px;">cached</span> swap';
