@@ -164,10 +164,15 @@
     </main>
 
     <!-- ===================== HOST TOAST ===================== -->
-    <div id="hostToast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-0 z-50 w-full max-w-md px-3 safe-bottom pointer-events-none">
-        <div id="hostToastInner" class="bg-zinc-800/95 backdrop-blur border border-white/15 rounded-2xl px-4 py-3 shadow-2xl flex items-start gap-2">
-            <span id="hostToastIcon" class="ms fill shrink-0 mt-0.5" style="font-size:22px;">campaign</span>
-            <p id="hostToastText" class="font-semibold text-sm leading-snug">…</p>
+    <div id="hostToast" class="hidden fixed left-1/2 -translate-x-1/2 bottom-0 z-50 w-full max-w-md px-3 pb-3 safe-bottom">
+        <div id="hostToastInner" class="bg-zinc-800/98 backdrop-blur border border-white/20 rounded-2xl p-4 shadow-2xl">
+            <div class="flex items-start gap-3">
+                <span id="hostToastIcon" class="ms fill shrink-0" style="font-size:32px;">campaign</span>
+                <p id="hostToastText" class="font-bold text-lg leading-snug">…</p>
+            </div>
+            <button id="hostToastNext" class="hidden mt-4 w-full bg-white text-black font-black rounded-xl py-3.5 text-base flex items-center justify-center gap-1.5 pop-animation">
+                <span id="hostToastNextLabel">Continue</span><span class="ms" style="font-size:20px;">arrow_forward</span>
+            </button>
         </div>
     </div>
 
@@ -469,16 +474,9 @@
             if (isRight) game.score++;
             updateTracker();
 
-            if (isRight) {
-                showHost(pick(correctLines) + (q.fact ? ` ${q.fact}` : ''), 'good');
-                if (settings.fx) burstConfetti();
-            } else {
-                showHost(pick(wrongLines) + ` The answer: ${q.correctText}.` + (q.fact ? ` ${q.fact}` : ''), 'bad');
-                if (settings.fx) doZonk();
-            }
-
             const justAnswered = game.idx;
-            setTimeout(() => {
+            const isLast = justAnswered === game.questions.length - 1;
+            const advance = () => {
                 hideHost();
                 game.idx++;
                 if (game.idx >= game.questions.length) {
@@ -489,7 +487,15 @@
                     el('progressHost').textContent = pick(progressLines);
                     showProgress(justAnswered, () => { show('game'); renderQuestion(); });
                 }
-            }, isRight ? 1600 : 2000);
+            };
+
+            if (isRight) {
+                showHost(pick(correctLines) + (q.fact ? ` ${q.fact}` : ''), 'good', { onNext: advance, nextLabel: isLast ? 'See results' : 'Continue' });
+                if (settings.fx) burstConfetti();
+            } else {
+                showHost(pick(wrongLines) + ` The answer: ${q.correctText}.` + (q.fact ? ` ${q.fact}` : ''), 'bad', { onNext: advance, nextLabel: isLast ? 'See results' : 'Continue' });
+                if (settings.fx) doZonk();
+            }
         }
 
         // ---------- Swap ----------
@@ -567,15 +573,27 @@
 
         // ---------- Host toast ----------
         let toastTimer = null;
-        function showHost(text, kind) {
-            const t = el('hostToast'), inner = el('hostToastInner'), icon = el('hostToastIcon');
+        function showHost(text, kind, opts = {}) {
+            const t = el('hostToast'), inner = el('hostToastInner'), icon = el('hostToastIcon'), next = el('hostToastNext');
             el('hostToastText').textContent = text;
             icon.textContent = kind === 'bad' ? 'sentiment_very_dissatisfied' : kind === 'good' ? 'celebration' : 'campaign';
+            clearTimeout(toastTimer);
+            if (opts.onNext) {
+                // Blocking: stays until the user taps Continue.
+                el('hostToastNextLabel').textContent = opts.nextLabel || 'Continue';
+                next.classList.remove('hidden');
+                next.onclick = opts.onNext;
+                t.classList.remove('pointer-events-none');
+            } else {
+                // Transient confirmation (e.g. swap): auto-dismisses.
+                next.classList.add('hidden');
+                next.onclick = null;
+                t.classList.add('pointer-events-none');
+                toastTimer = setTimeout(() => hideHost(), opts.duration || 2200);
+            }
             inner.classList.remove('toast-out');
             t.classList.remove('hidden');
             inner.classList.remove('toast-in'); void inner.offsetWidth; inner.classList.add('toast-in');
-            clearTimeout(toastTimer);
-            toastTimer = setTimeout(() => hideHost(), 4000);
         }
         function hideHost(instant) {
             const t = el('hostToast'), inner = el('hostToastInner');
