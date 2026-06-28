@@ -4,8 +4,8 @@
 // so we just talk to the standard Anthropic Messages API over fetch (no SDK,
 // no npm install, keeps this a zero-dependency static site).
 
-// Haiku for the fastest generation; the JSON shape is simple and well-specified.
-const MODEL = "claude-haiku-4-5";
+// Sonnet for sharper, more varied, harder questions.
+const MODEL = "claude-sonnet-4-6";
 
 const CATEGORIES = ["Birds", "90s Movies", "Music", "Animals", "Texas"];
 
@@ -13,20 +13,23 @@ const SYSTEM_PROMPT = `You write trivia questions for "Trivia Hound", a fun, fas
 
 Audience & vibe: think a sharp, fun 40-something woman crushing it at girls' trivia night — the stuff she knows cold. Keep it warm, playful, and pop-culture-literate. Never mean, never NSFW, never political hot-takes.
 
-Difficulty: MEDIUM. Not "name the capital" easy, not PhD obscure. A clever person should get most of them with a satisfying "ohhh yeah!"
+Difficulty: MEDIUM-HARD. These should make her think — the kind that earns a "ooh, good one" not an eye-roll. Avoid the obvious gimme. Reach for a specific detail, a deeper cut, a second-album-track, a supporting character, the lesser-known fact. A trivia regular should get maybe half on instinct and have to genuinely work for the rest.
+
+AVOID these overused chestnuts (and anything this easy/cliché): "only bird that can fly backwards" (hummingbird), "a "murder" of crows", "I'll never let go, Jack", Clueless "As if", the Macarena, "Wannabe / zig-a-zig-ah", lions = "pride", blue whale heart = a car, Austin = "Live Music Capital", Beyoncé is from Houston. Do not reuse these or their close cousins.
 
 Draw ONLY from these topics, mixing them across the set:
-- Birds (backyard birds, famous birds, bird facts, bird behavior)
-- 90s Movies (rom-coms, blockbusters, quotable classics from ~1990–1999)
-- Music (90s/2000s pop, country, divas, one-hit wonders, iconic albums)
-- Animals (cute, weird, and wild — mammals, pets, ocean critters)
-- Texas pop culture (TX music, food, towns, slang, famous Texans, Friday Night Lights energy)
+- Birds (behavior, migration, species ID, oddities — go beyond the backyard basics)
+- 90s Movies (specific scenes, casts, directors, lesser-known hits and one-liners from ~1990–1999)
+- Music (90s/2000s pop, country, divas, album cuts, chart history, collaborations — not just the #1 smash everyone knows)
+- Animals (surprising biology, behavior, record-holders, the genuinely weird)
+- Texas pop culture (TX music, food, towns, slang, famous Texans, sports, history with a wink)
 
 Rules for every question:
 - Exactly 4 answer options, exactly ONE correct.
-- Wrong options must be plausible and in the same spirit (no obvious throwaways).
+- Wrong options must be genuinely plausible to a knowledgeable player — close, same era/genre/family, no obvious throwaways.
 - Phrase it punchy and readable on a phone — one or two short sentences max.
-- Factually correct and verifiable.
+- Factually correct and verifiable. No trick questions or ambiguous answers.
+- Every question in a set must be distinct — no two on the same fact, person, or work.
 
 Return ONLY valid minified JSON. No markdown, no code fences, no commentary.`;
 
@@ -34,7 +37,7 @@ function buildUserPrompt(count, avoid, avoidCategory) {
   const avoidBlock =
     avoid && avoid.length
       ? `\n\nDo NOT repeat or closely paraphrase any of these already-used questions:\n- ${avoid
-          .slice(0, 60)
+          .slice(0, 80)
           .join("\n- ")}`
       : "";
 
@@ -78,6 +81,7 @@ function extractJson(text) {
 
 function sanitize(items) {
   if (!Array.isArray(items)) return [];
+  const seen = new Set();
   return items
     .map((q) => {
       if (!q || typeof q.question !== "string" || !Array.isArray(q.answers))
@@ -88,6 +92,10 @@ function sanitize(items) {
       if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex > 3)
         correctIndex = 0;
       const category = CATEGORIES.includes(q.category) ? q.category : "Music";
+      // Drop duplicates within the same batch.
+      const key = q.question.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (seen.has(key)) return null;
+      seen.add(key);
       return {
         category,
         question: q.question.trim(),
@@ -144,7 +152,7 @@ export default async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 2200,
+        max_tokens: 3200,
         temperature: 1,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildUserPrompt(count, avoid, avoidCategory) }],
