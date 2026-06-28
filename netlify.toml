@@ -1,0 +1,12 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# Pretty URL for the challenge game (keeps the address bar at /challenge).
+[[redirects]]
+  from = "/challenge"
+  to = "/challenge.html"
+  status = 200
