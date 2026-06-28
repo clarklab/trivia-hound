@@ -30,21 +30,31 @@ Rules for every question:
 
 Return ONLY valid minified JSON. No markdown, no code fences, no commentary.`;
 
-function buildUserPrompt(count, avoid) {
+function buildUserPrompt(count, avoid, avoidCategory) {
   const avoidBlock =
     avoid && avoid.length
       ? `\n\nDo NOT repeat or closely paraphrase any of these already-used questions:\n- ${avoid
           .slice(0, 60)
           .join("\n- ")}`
       : "";
+
+  const allowed = avoidCategory
+    ? CATEGORIES.filter((c) => c !== avoidCategory)
+    : CATEGORIES;
+  const categoryRule = avoidCategory
+    ? `\n\nIMPORTANT: Do NOT use the "${avoidCategory}" category. Pick from these instead: ${JSON.stringify(
+        allowed
+      )}.`
+    : "";
+
   return `Generate exactly ${count} trivia question(s) as a JSON array.
 
 Each array element must be an object with this exact shape:
 {"category": one of ${JSON.stringify(
-    CATEGORIES
+    allowed
   )}, "question": "string", "answers": ["opt1","opt2","opt3","opt4"], "correctIndex": 0-3, "fact": "one short, fun sentence about the correct answer"}
 
-Spread the questions across the different topics. Return ONLY the JSON array.${avoidBlock}`;
+Spread the questions across the different topics. Return ONLY the JSON array.${categoryRule}${avoidBlock}`;
 }
 
 function extractJson(text) {
@@ -106,6 +116,8 @@ export default async (req) => {
 
   const count = Math.min(Math.max(parseInt(body.count, 10) || 10, 1), 20);
   const avoid = Array.isArray(body.avoid) ? body.avoid : [];
+  const avoidCategory =
+    typeof body.avoidCategory === "string" ? body.avoidCategory : null;
 
   const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(
     /\/+$/,
@@ -135,7 +147,7 @@ export default async (req) => {
         max_tokens: 2200,
         temperature: 1,
         system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: buildUserPrompt(count, avoid) }],
+        messages: [{ role: "user", content: buildUserPrompt(count, avoid, avoidCategory) }],
       }),
     });
 
