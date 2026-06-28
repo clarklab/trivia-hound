@@ -4,7 +4,8 @@
 // so we just talk to the standard Anthropic Messages API over fetch (no SDK,
 // no npm install, keeps this a zero-dependency static site).
 
-const MODEL = "claude-sonnet-4-5";
+// Haiku for the fastest generation; the JSON shape is simple and well-specified.
+const MODEL = "claude-haiku-4-5";
 
 const CATEGORIES = ["Birds", "90s Movies", "Music", "Animals", "Texas"];
 
