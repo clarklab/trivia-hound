@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Trivia Hound — Challenge</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;600;700;900&display=swap" rel="stylesheet">
+    <link href="favicon.svg" rel="icon" type="image/svg+xml">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+
+    <style>
+        html, body { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', sans-serif; overscroll-behavior-y: none; }
+
+        .pop-animation { transition: transform 0.12s ease; }
+        .pop-animation:active { transform: scale(0.97); }
+
+        @keyframes pop-in {
+            0% { transform: scale(0.85); opacity: 0; }
+            60% { transform: scale(1.03); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        .anim-pop-in { animation: pop-in 0.35s cubic-bezier(.2,.8,.2,1) both; }
+
+        @keyframes slide-up {
+            0% { transform: translateY(24px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        .anim-slide-up { animation: slide-up 0.3s ease both; }
+
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            15% { transform: translateX(-12px) rotate(-1deg); }
+            30% { transform: translateX(12px) rotate(1deg); }
+            45% { transform: translateX(-10px); }
+            60% { transform: translateX(10px); }
+            75% { transform: translateX(-6px); }
+            90% { transform: translateX(6px); }
+        }
+        .anim-shake { animation: shake 0.5s ease; }
+
+        @keyframes zonk-bang {
+            0% { transform: scale(0.2) rotate(-18deg); opacity: 0; }
+            45% { transform: scale(1.25) rotate(6deg); opacity: 1; }
+            70% { transform: scale(0.95) rotate(-3deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .anim-zonk { animation: zonk-bang 0.5s cubic-bezier(.2,.9,.3,1.4) both; }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.55); }
+            100% { box-shadow: 0 0 0 12px rgba(255,255,255,0); }
+        }
+        .pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
+
+        @keyframes bob {
+            0%,100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+        .anim-bob { animation: bob 2.2s ease-in-out infinite; }
+
+        @keyframes bounce-in {
+            0% { transform: scale(0.6); opacity: 0; }
+            70% { transform: scale(1.08); opacity: 1; }
+            100% { transform: scale(1); }
+        }
+        .anim-bounce-in { animation: bounce-in 0.4s cubic-bezier(.2,.8,.2,1.2) both; }
+
+        @keyframes spinny {
+            from { transform: rotate(0); }
+            to { transform: rotate(360deg); }
+        }
+        .anim-spin { animation: spinny 0.9s linear infinite; }
+
+        .step-dot { transition: all 0.3s cubic-bezier(.2,.8,.2,1); }
+        .answer-btn { transition: transform .12s ease, background-color .2s ease, border-color .2s ease, color .2s ease; }
+        .answer-btn:active { transform: scale(0.98); }
+        .no-scroll { overflow: hidden; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen flex flex-col">
+
+    <!-- Top Bar -->
+    <div id="topBar" class="bg-black text-white px-4 pt-4 pb-3 flex justify-between items-center sticky top-0 z-30 border-b border-white/10">
+        <a href="index.html" class="bg-white text-black h-9 w-9 rounded-full flex items-center justify-center hover:opacity-70 pop-animation" aria-label="Home">
+            <span class="material-icons" style="font-size:20px;">arrow_back</span>
+        </a>
+        <div class="flex items-center gap-x-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24"><title>dog-leash</title><g fill="#ffffff"><path d="M19,5,17,3,14.26,9.394a1,1,0,0,1-.919.606H6a2,2,0,0,0-2,2V22H7V19.236a.993.993,0,0,1,.106-.447L9,15l5.316,1.772a1,1,0,0,1,.684.949V22h3V17l2-8h1a2,2,0,0,0,2-2V5Z" fill="none" stroke="#ffffff" stroke-width="2"></path><path d="M12,7A6,6,0,0,1,6,1" fill="none" stroke="#ffffff" stroke-width="2"></path><path d="M1,7a3,3,0,0,0,3,3H5" fill="none" stroke="#ffffff" stroke-width="2"></path></g></svg>
+            <h1 class="text-xl font-black tracking-tight">Challenge</h1>
+        </div>
+        <button id="settingsBtn" class="bg-white text-black h-9 w-9 rounded-full flex items-center justify-center hover:opacity-70 pop-animation" aria-label="Settings">
+            <span class="material-icons" style="font-size:20px;">tune</span>
+        </button>
+    </div>
+
+    <main class="flex-grow w-full max-w-xl mx-auto px-4 w-full flex flex-col">
+
+        <!-- ===================== START SCREEN ===================== -->
+        <section id="startScreen" class="flex-grow flex flex-col items-center justify-center text-center py-10">
+            <div class="text-7xl mb-2 anim-bob">🎤</div>
+            <h2 class="text-4xl font-black leading-none mb-3">The Trivia<br>Challenge</h2>
+            <p id="startBlurb" class="text-white/70 max-w-xs mb-1">Birds, '90s movies, music, animals &amp; Texas. Medium heat. 🌶️</p>
+            <p class="text-white/40 text-sm mb-8">Walk &amp; play. Get through them all to win.</p>
+
+            <div class="bg-white/5 border border-white/10 rounded-2xl px-5 py-4 mb-8 w-full max-w-xs">
+                <div class="flex items-center justify-between">
+                    <div class="text-left">
+                        <div class="text-xs uppercase tracking-wider text-white/40">Best Run</div>
+                        <div id="bestStat" class="text-2xl font-black">—</div>
+                    </div>
+                    <div class="text-left">
+                        <div class="text-xs uppercase tracking-wider text-white/40">Questions</div>
+                        <div id="lenStat" class="text-2xl font-black">10</div>
+                    </div>
+                    <div class="text-4xl anim-bob">🦅</div>
+                </div>
+            </div>
+
+            <button id="startBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs shadow-lg shadow-white/10">
+                Let's Go! 🎬
+            </button>
+            <button id="settingsLink" class="mt-4 text-white/50 text-sm underline">Game settings</button>
+        </section>
+
+        <!-- ===================== LOADING SCREEN ===================== -->
+        <section id="loadingScreen" class="hidden flex-grow flex flex-col items-center justify-center text-center py-10">
+            <div class="text-6xl mb-6 anim-spin">🦴</div>
+            <h2 class="text-2xl font-black mb-2">Wranglin' up questions…</h2>
+            <p id="loadingQuip" class="text-white/60 max-w-xs">Fetching the good stuff.</p>
+        </section>
+
+        <!-- ===================== GAME SCREEN ===================== -->
+        <section id="gameScreen" class="hidden flex-grow flex-col py-4">
+
+            <!-- Step tracker -->
+            <div id="tracker" class="flex items-center justify-center gap-1.5 flex-wrap mb-4"></div>
+
+            <!-- Host speech bubble -->
+            <div id="hostBubble" class="bg-white text-black rounded-2xl px-4 py-3 mb-4 relative anim-pop-in">
+                <div class="flex items-start gap-2">
+                    <span class="text-2xl leading-none">🎙️</span>
+                    <p id="hostText" class="font-semibold text-sm leading-snug pt-0.5">Alright hot shot, let's see what you've got!</p>
+                </div>
+            </div>
+
+            <!-- Question card -->
+            <div id="questionCard" class="bg-white/5 border border-white/10 rounded-3xl p-5 flex-grow flex flex-col">
+                <div class="flex items-center justify-between mb-3">
+                    <span id="catBadge" class="text-xs font-black uppercase tracking-wider bg-white text-black rounded-full px-3 py-1">Birds</span>
+                    <button id="swapBtn" class="text-white/60 hover:text-white text-xs flex items-center gap-1 pop-animation" aria-label="Swap question">
+                        <span class="material-icons" style="font-size:16px;">cached</span> swap
+                    </button>
+                </div>
+
+                <p id="questionText" class="text-2xl font-black leading-tight mb-5">Loading…</p>
+
+                <div id="answers" class="grid grid-cols-1 gap-3 mt-auto"></div>
+            </div>
+        </section>
+
+        <!-- ===================== WIN / END SCREEN ===================== -->
+        <section id="endScreen" class="hidden flex-grow flex-col items-center justify-center text-center py-10">
+            <div id="endEmoji" class="text-7xl mb-3 anim-bounce-in">🏆</div>
+            <h2 id="endTitle" class="text-4xl font-black leading-none mb-3">You Win!</h2>
+            <div class="text-6xl font-black mb-1"><span id="endScore">10</span><span class="text-white/40 text-3xl">/<span id="endTotal">10</span></span></div>
+            <p id="endHost" class="text-white/70 max-w-xs my-4">The crowd goes wild!</p>
+
+            <div id="endBadges" class="flex items-center justify-center gap-2 flex-wrap mb-8"></div>
+
+            <button id="playAgainBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs">
+                Play Again 🔁
+            </button>
+            <a href="index.html" class="mt-4 text-white/50 text-sm underline">Back to Trivia Hound</a>
+        </section>
+
+    </main>
+
+    <!-- ===================== FEEDBACK OVERLAY ===================== -->
+    <div id="overlay" class="hidden fixed inset-0 z-40 flex items-center justify-center pointer-events-none">
+        <div id="overlayInner" class="text-center px-6"></div>
+    </div>
+
+    <!-- ===================== SETTINGS MODAL ===================== -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div class="bg-zinc-900 border border-white/10 rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 anim-slide-up safe-bottom">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-2xl font-black">Settings</h3>
+                <button id="closeSettings" class="bg-white/10 h-9 w-9 rounded-full flex items-center justify-center pop-animation">
+                    <span class="material-icons" style="font-size:20px;">close</span>
+                </button>
+            </div>
+
+            <label class="block mb-2 text-sm font-bold text-white/70">How many questions to win?</label>
+            <div class="flex items-center gap-4 mb-6">
+                <input id="countRange" type="range" min="5" max="20" step="1" value="10" class="flex-grow accent-white">
+                <span id="countVal" class="text-3xl font-black w-12 text-right">10</span>
+            </div>
+
+            <label class="flex items-center justify-between mb-6 cursor-pointer">
+                <span class="text-sm font-bold text-white/70">Sound effects (visual zonks &amp; pops)</span>
+                <input id="fxToggle" type="checkbox" checked class="w-5 h-5 accent-white">
+            </label>
+
+            <div class="bg-white/5 rounded-2xl p-4 mb-6 text-sm text-white/60">
+                <p class="font-bold text-white/80 mb-1">The vibe 💅</p>
+                Medium-difficulty trivia on birds, '90s movies, music, animals, and Texas pop culture — fresh questions generated every game.
+            </div>
+
+            <button id="resetBest" class="text-white/40 text-xs underline">Reset best run</button>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        // ---------- Theme (shared with home page) ----------
+        const savedColor = localStorage.getItem('selectedColor');
+        const accent = savedColor || 'black';
+        // Top bar already black; nothing else to recolor for the dark theme.
+
+        // ---------- Elements ----------
+        const el = (id) => document.getElementById(id);
+        const screens = {
+            start: el('startScreen'),
+            loading: el('loadingScreen'),
+            game: el('gameScreen'),
+            end: el('endScreen'),
+        };
+        function show(name) {
+            Object.entries(screens).forEach(([k, node]) => {
+                node.classList.toggle('hidden', k !== name);
+                node.classList.toggle('flex', k === name);
+            });
+        }
+
+        // ---------- Settings (localStorage) ----------
+        const SETTINGS_KEY = 'th_challenge_settings';
+        const BEST_KEY = 'th_challenge_best';
+        const defaults = { count: 10, fx: true };
+        let settings = Object.assign({}, defaults, loadJSON(SETTINGS_KEY, {}));
+
+        function loadJSON(key, fallback) {
+            try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+            catch { return fallback; }
+        }
+        function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+        function getBest() { return loadJSON(BEST_KEY, null); }
+        function setBest(b) { localStorage.setItem(BEST_KEY, JSON.stringify(b)); }
+
+        function refreshStartStats() {
+            el('lenStat').textContent = settings.count;
+            const best = getBest();
+            el('bestStat').textContent = best ? `${best.score}/${best.total}` : '—';
+        }
+
+        // ---------- Host banter ----------
+        const hostIntros = [
+            "Alright hot shot, let's see what you've got! 🎬",
+            "Phones up, brains on. Here we gooo!",
+            "Ten questions stand between you and glory. Easy, right?",
+            "I've got a good feeling about you. Don't make me regret it.",
+            "Let's get quizzin', sweet thing! 🥂",
+            "Strut in here like you own the place — let's play!",
+        ];
+        const correctLines = [
+            "YES! Smart AND humble. 💅",
+            "Correct! Somebody's been doing the reading.",
+            "Ding ding ding! Pour yourself a little wine, you earned it. 🍷",
+            "Nailed it! That's a Target-run-victory-lap right there.",
+            "Boom! Big brain energy.",
+            "Correct! You absolute legend.",
+            "Yes ma'am! Chef's kiss. 😘",
+            "Right again?! Save some smarts for the rest of us.",
+            "Crushed it. The book club is gonna hear about this.",
+            "Correct! You're on FIRE today. 🔥",
+            "That's the one! Stanley cup raised in your honor.",
+            "Yep! You make this look easy.",
+        ];
+        const wrongLines = [
+            "OOF. That's a Texas-sized ZONK. 🤠",
+            "Nope! But you said it with such confidence.",
+            "Wrong-o! Even the dog's looking at you funny. 🐕",
+            "Eeesh, no. We'll cut that from the highlight reel.",
+            "ZONK! Shake it off, queen.",
+            "Not quite! That answer needs a lie-down.",
+            "Wrong! But honestly? A bold choice.",
+            "Nooo! The sad trombone is playing. 🎺",
+            "Swing and a miss! Happens to the best of us.",
+            "Incorrect! Blame Mercury retrograde. 🔮",
+            "Whoops! That's gonna be a no from the judges.",
+            "Big yikes, no. But your hair looks great.",
+        ];
+        const winLines = [
+            "WINNER WINNER! The crowd goes absolutely feral. 🎉",
+            "You did it! Somebody get this genius a margarita. 🍹",
+            "Champion! Frame this and hang it in the kitchen.",
+            "Victory! The group chat is NOT gonna believe this.",
+            "You crushed the whole thing. Iconic behavior.",
+        ];
+        const perfectLines = [
+            "A PERFECT GAME?! Flawless. Spotless. Unbothered. 👑",
+            "100%?! Okay show-off, we're not worthy. 🙇‍♀️",
+            "Perfect score! You're basically a Jeopardy villain now.",
+            "Not a single miss. Are you even human? Incredible.",
+        ];
+        const loseLines = [
+            "We've seen worse… not recently, but we have. 😅",
+            "Not your day, but the snacks were great. Run it back?",
+            "The trivia gods were stingy. Try again, champ.",
+            "Hey, participation is its own reward. Sort of.",
+        ];
+        const loadingQuips = [
+            "Asking the smart bird for fresh questions… 🦜",
+            "Bribing the trivia hound with treats… 🦴",
+            "Cueing up some '90s deep cuts…",
+            "Dusting off the Texas trivia…",
+            "Warming up the confetti cannon… 🎉",
+        ];
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+        // ---------- Game state ----------
+        let game = null; // { questions:[], idx, score, results:[] }
+        let busy = false;
+
+        // ---------- Question generation ----------
+        async function fetchQuestions(count, avoid) {
+            const res = await fetch('/api/questions', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ count, avoid: avoid || [] }),
+            });
+            if (!res.ok) throw new Error('gen failed ' + res.status);
+            const data = await res.json();
+            if (!data.questions || !data.questions.length) throw new Error('no questions');
+            return data.questions;
+        }
+
+        function shuffle(a) {
+            const arr = a.slice();
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        // Normalize one question: shuffle answers, track correct text.
+        function normalize(q) {
+            const correctText = q.answers[q.correctIndex];
+            const answers = shuffle(q.answers);
+            return {
+                category: q.category,
+                question: q.question,
+                answers,
+                correctText,
+                fact: q.fact || '',
+            };
+        }
+
+        async function startGame() {
+            show('loading');
+            el('loadingQuip').textContent = pick(loadingQuips);
+            const quipTimer = setInterval(() => {
+                el('loadingQuip').textContent = pick(loadingQuips);
+            }, 1800);
+
+            try {
+                const raw = await fetchQuestions(settings.count);
+                clearInterval(quipTimer);
+                game = {
+                    questions: raw.map(normalize),
+                    idx: 0,
+                    score: 0,
+                    results: [],
+                };
+                buildTracker();
+                show('game');
+                el('hostText').textContent = pick(hostIntros);
+                renderQuestion();
+            } catch (err) {
+                clearInterval(quipTimer);
+                useFallback(err);
+            }
+        }
+
+        // Offline / gateway-down fallback so the game always plays.
+        function useFallback(err) {
+            console.warn('Falling back to local questions:', err);
+            const bank = shuffle(FALLBACK_BANK).slice(0, settings.count);
+            game = { questions: bank.map(normalize), idx: 0, score: 0, results: [] };
+            buildTracker();
+            show('game');
+            el('hostText').textContent = "Backup brain engaged! Let's play. 🧠";
+            renderQuestion();
+        }
+
+        // ---------- Step tracker ----------
+        function buildTracker() {
+            const t = el('tracker');
+            t.innerHTML = '';
+            for (let i = 0; i < game.questions.length; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'step-dot h-3 w-3 rounded-full bg-white/20';
+                dot.dataset.i = i;
+                t.appendChild(dot);
+            }
+            updateTracker();
+        }
+        function updateTracker() {
+            [...el('tracker').children].forEach((dot, i) => {
+                dot.className = 'step-dot rounded-full';
+                const r = game.results[i];
+                if (r === 'right') dot.className += ' h-3 w-3 bg-green-400';
+                else if (r === 'wrong') dot.className += ' h-3 w-3 bg-red-500';
+                else if (i === game.idx) dot.className += ' h-4 w-4 bg-white pulse-ring';
+                else dot.className += ' h-3 w-3 bg-white/20';
+            });
+        }
+
+        // ---------- Render a question ----------
+        function renderQuestion() {
+            busy = false;
+            const q = game.questions[game.idx];
+            updateTracker();
+
+            const card = el('questionCard');
+            card.classList.remove('anim-slide-up'); void card.offsetWidth; card.classList.add('anim-slide-up');
+
+            el('catBadge').textContent = q.category;
+            el('questionText').textContent = q.question;
+
+            const wrap = el('answers');
+            wrap.innerHTML = '';
+            q.answers.forEach((ans) => {
+                const btn = document.createElement('button');
+                btn.className = 'answer-btn text-left font-bold bg-white/10 hover:bg-white/20 border-2 border-transparent rounded-2xl px-4 py-4 text-base';
+                btn.textContent = ans;
+                btn.onclick = () => answer(btn, ans, q);
+                wrap.appendChild(btn);
+            });
+        }
+
+        // ---------- Answer handling ----------
+        function answer(btn, chosen, q) {
+            if (busy) return;
+            busy = true;
+            const isRight = chosen === q.correctText;
+            const buttons = [...el('answers').children];
+
+            buttons.forEach((b) => {
+                b.disabled = true;
+                if (b.textContent === q.correctText) {
+                    b.className = 'answer-btn text-left font-bold bg-green-500 text-black border-2 border-green-300 rounded-2xl px-4 py-4 text-base';
+                } else if (b === btn) {
+                    b.className = 'answer-btn text-left font-bold bg-red-600 text-white border-2 border-red-400 rounded-2xl px-4 py-4 text-base';
+                } else {
+                    b.className = 'answer-btn text-left font-bold bg-white/5 text-white/40 border-2 border-transparent rounded-2xl px-4 py-4 text-base';
+                }
+            });
+
+            game.results[game.idx] = isRight ? 'right' : 'wrong';
+            if (isRight) game.score++;
+            updateTracker();
+
+            if (isRight) {
+                el('hostText').textContent = pick(correctLines) + (q.fact ? ` (${q.fact})` : '');
+                if (settings.fx) burstConfetti();
+            } else {
+                el('hostText').textContent = pick(wrongLines) + (q.fact ? ` The answer: ${q.correctText}. ${q.fact}` : ` It was: ${q.correctText}.`);
+                if (settings.fx) doZonk();
+            }
+            el('hostBubble').classList.remove('anim-pop-in'); void el('hostBubble').offsetWidth; el('hostBubble').classList.add('anim-pop-in');
+
+            setTimeout(next, isRight ? 1150 : 1700);
+        }
+
+        function next() {
+            game.idx++;
+            if (game.idx >= game.questions.length) {
+                endGame();
+            } else {
+                renderQuestion();
+            }
+        }
+
+        // ---------- Swap ----------
+        let swapping = false;
+        async function swapQuestion() {
+            if (busy || swapping) return;
+            swapping = true;
+            const swapBtn = el('swapBtn');
+            swapBtn.innerHTML = '<span class="material-icons anim-spin" style="font-size:16px;">cached</span> swapping…';
+            const avoid = game.questions.map((q) => q.question);
+            try {
+                const [fresh] = await fetchQuestions(1, avoid);
+                game.questions[game.idx] = normalize(fresh);
+                el('hostText').textContent = "Fresh one, comin' up! 🔄";
+            } catch (err) {
+                // fall back to a local question not already in the set
+                const used = new Set(game.questions.map((q) => q.question));
+                const cand = FALLBACK_BANK.find((q) => !used.has(q.question));
+                if (cand) {
+                    game.questions[game.idx] = normalize(cand);
+                    el('hostText').textContent = "Here's another from the backup pile!";
+                }
+            } finally {
+                swapBtn.innerHTML = '<span class="material-icons" style="font-size:16px;">cached</span> swap';
+                swapping = false;
+                renderQuestion();
+            }
+        }
+
+        // ---------- End ----------
+        function endGame() {
+            const total = game.questions.length;
+            const score = game.score;
+            const perfect = score === total;
+            const won = score > total / 2;
+
+            // Best run (by score, then ratio)
+            const best = getBest();
+            const ratio = score / total;
+            if (!best || score > best.score || (score === best.score && ratio > best.score / best.total)) {
+                setBest({ score, total });
+            }
+
+            el('endTotal').textContent = total;
+            el('endScore').textContent = score;
+            el('endTitle').textContent = perfect ? 'PERFECT!' : won ? 'You Win!' : 'Game Over';
+            el('endEmoji').textContent = perfect ? '👑' : won ? '🏆' : '🪦';
+            el('endHost').textContent = perfect ? pick(perfectLines) : won ? pick(winLines) : pick(loseLines);
+
+            const badges = el('endBadges');
+            badges.innerHTML = '';
+            const addBadge = (txt) => {
+                const b = document.createElement('span');
+                b.className = 'bg-white/10 rounded-full px-3 py-1 text-sm font-bold';
+                b.textContent = txt;
+                badges.appendChild(b);
+            };
+            addBadge(`${Math.round(ratio * 100)}% correct`);
+            if (perfect) addBadge('Flawless 👑');
+            else if (won) addBadge('Winner 🏆');
+            if (score >= 7 && !perfect) addBadge('Sharp 🧠');
+
+            show('end');
+            if (settings.fx && won) celebrate(perfect);
+        }
+
+        // ---------- Effects ----------
+        const hasConfetti = () => typeof confetti === 'function';
+        function burstConfetti() {
+            if (!hasConfetti()) return;
+            confetti({ particleCount: 60, spread: 70, startVelocity: 38, origin: { y: 0.7 }, scalar: 0.9 });
+        }
+        function celebrate(perfect) {
+            if (!hasConfetti()) return;
+            const end = Date.now() + (perfect ? 1800 : 1100);
+            (function frame() {
+                confetti({ particleCount: 6, angle: 60, spread: 60, origin: { x: 0 } });
+                confetti({ particleCount: 6, angle: 120, spread: 60, origin: { x: 1 } });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            })();
+        }
+        function doZonk() {
+            const ov = el('overlay');
+            const inner = el('overlayInner');
+            inner.innerHTML = '<div class="anim-zonk text-7xl font-black text-red-500 drop-shadow-[0_4px_0_rgba(0,0,0,0.6)]">ZONK!</div>';
+            ov.classList.remove('hidden');
+            const card = el('questionCard');
+            card.classList.remove('anim-shake'); void card.offsetWidth; card.classList.add('anim-shake');
+            document.body.style.backgroundColor = '#3b0a0a';
+            setTimeout(() => {
+                document.body.style.backgroundColor = '';
+                ov.classList.add('hidden');
+            }, 650);
+        }
+
+        // ---------- Settings modal ----------
+        function openSettings() {
+            el('countRange').value = settings.count;
+            el('countVal').textContent = settings.count;
+            el('fxToggle').checked = settings.fx;
+            el('settingsModal').classList.remove('hidden');
+            document.body.classList.add('no-scroll');
+        }
+        function closeSettings() {
+            el('settingsModal').classList.add('hidden');
+            document.body.classList.remove('no-scroll');
+            refreshStartStats();
+        }
+
+        el('settingsBtn').onclick = openSettings;
+        el('settingsLink').onclick = openSettings;
+        el('closeSettings').onclick = closeSettings;
+        el('settingsModal').addEventListener('click', (e) => {
+            if (e.target === el('settingsModal')) closeSettings();
+        });
+        el('countRange').addEventListener('input', (e) => {
+            settings.count = parseInt(e.target.value, 10);
+            el('countVal').textContent = settings.count;
+            saveSettings();
+        });
+        el('fxToggle').addEventListener('change', (e) => {
+            settings.fx = e.target.checked;
+            saveSettings();
+        });
+        el('resetBest').onclick = () => {
+            localStorage.removeItem(BEST_KEY);
+            refreshStartStats();
+            el('resetBest').textContent = 'Cleared!';
+            setTimeout(() => { el('resetBest').textContent = 'Reset best run'; }, 1200);
+        };
+
+        // ---------- Buttons ----------
+        el('startBtn').onclick = startGame;
+        el('playAgainBtn').onclick = startGame;
+        el('swapBtn').onclick = swapQuestion;
+
+        // ---------- Init ----------
+        refreshStartStats();
+        show('start');
+
+        // ===================== Fallback question bank =====================
+        // Used only if the AI Gateway is unreachable, so the game always works.
+        const FALLBACK_BANK = [
+            { category: 'Birds', question: "Which bird is famous for being able to mimic human speech?", answers: ["African Grey Parrot","Bald Eagle","Robin","Cardinal"], correctIndex: 0, fact: "African Greys can learn hundreds of words." },
+            { category: 'Birds', question: "What is a group of crows called?", answers: ["A murder","A gaggle","A pod","A pride"], correctIndex: 0, fact: "Yes — a 'murder' of crows. Spooky." },
+            { category: 'Birds', question: "Which brightly colored bird is the state bird of seven U.S. states?", answers: ["Northern Cardinal","Blue Jay","Mockingbird","Goldfinch"], correctIndex: 0, fact: "The cardinal is a backyard superstar." },
+            { category: 'Birds', question: "Which is the only bird that can fly backwards?", answers: ["Hummingbird","Sparrow","Owl","Penguin"], correctIndex: 0, fact: "Hummingbird wings beat up to 80 times a second." },
+            { category: '90s Movies', question: "In 'Titanic' (1997), what does Rose promise she'll never do?", answers: ["Let go","Forget Jack","Marry Cal","Leave the ship"], correctIndex: 0, fact: "\"I'll never let go, Jack.\"" },
+            { category: '90s Movies', question: "Which 1990 film features Julia Roberts as Vivian on Hollywood Boulevard?", answers: ["Pretty Woman","Steel Magnolias","Erin Brockovich","Notting Hill"], correctIndex: 0, fact: "It made Julia Roberts a megastar." },
+            { category: '90s Movies', question: "In 'Clueless' (1995), what is Cher's favorite word for something great?", answers: ["\"Way\"","\"Tubular\"","\"Fetch\"","\"Bananas\""], correctIndex: 0, fact: "As if you didn't know!" },
+            { category: '90s Movies', question: "Which 1993 comedy has Bill Murray reliving the same day over and over?", answers: ["Groundhog Day","Big","Multiplicity","Scrooged"], correctIndex: 0, fact: "He wakes up to 'I Got You Babe' every time." },
+            { category: 'Music', question: "Which diva sang 'I Will Always Love You' for 'The Bodyguard'?", answers: ["Whitney Houston","Mariah Carey","Celine Dion","Tina Turner"], correctIndex: 0, fact: "Originally written by Dolly Parton." },
+            { category: 'Music', question: "\"Wannabe\" was the breakout 1996 hit by which girl group?", answers: ["Spice Girls","TLC","Destiny's Child","En Vogue"], correctIndex: 0, fact: "Zig-a-zig-ah!" },
+            { category: 'Music', question: "Shania Twain asked 'Man! I Feel Like...' what?", answers: ["A Woman","Dancing","Singing","Flying"], correctIndex: 0, fact: "A 1997 crossover smash." },
+            { category: 'Music', question: "Which 90s hit by Los del Río came with its own line dance?", answers: ["Macarena","Mambo No. 5","Cotton Eye Joe","Tubthumping"], correctIndex: 0, fact: "Heeey, Macarena!" },
+            { category: 'Animals', question: "What is the only mammal capable of true sustained flight?", answers: ["Bat","Flying squirrel","Sugar glider","Lemur"], correctIndex: 0, fact: "Flying squirrels only glide." },
+            { category: 'Animals', question: "A group of lions is called a what?", answers: ["Pride","Pack","Herd","School"], correctIndex: 0, fact: "Prides can have up to 30 lions." },
+            { category: 'Animals', question: "Which animal has a heart that can weigh as much as a car?", answers: ["Blue whale","Elephant","Giraffe","Hippo"], correctIndex: 0, fact: "A blue whale's heart can weigh ~400 lbs." },
+            { category: 'Texas', question: "What is the official 'big' nickname of the state of Texas?", answers: ["The Lone Star State","The Sunshine State","The Bayou State","The Bluegrass State"], correctIndex: 0, fact: "One star, big attitude." },
+            { category: 'Texas', question: "Which Texas city is known as the 'Live Music Capital of the World'?", answers: ["Austin","Houston","Dallas","El Paso"], correctIndex: 0, fact: "Home of SXSW and ACL." },
+            { category: 'Texas', question: "Beyoncé, a global superstar, hails from which Texas city?", answers: ["Houston","San Antonio","Lubbock","Waco"], correctIndex: 0, fact: "H-Town's finest. 🐝" },
+            { category: 'Texas', question: "What chunky, cheesy dip is a Tex-Mex staple at every gathering?", answers: ["Queso","Hummus","Tzatziki","Salsa verde"], correctIndex: 0, fact: "Don't skip the chips." },
+        ];
+    });
+    </script>
+</body>
+</html>
