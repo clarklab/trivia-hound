@@ -180,15 +180,26 @@
             </div>
 
             <label class="block mb-2 text-sm font-bold text-white/70">How many questions to win?</label>
-            <div class="flex items-center gap-4 mb-6">
+            <div class="flex items-center gap-4 mb-2">
                 <input id="countRange" type="range" min="5" max="20" step="1" value="10" class="flex-grow accent-white">
                 <span id="countVal" class="text-3xl font-black w-12 text-right">10</span>
             </div>
+            <p id="countHint" class="text-xs text-white/40 mb-6 h-4"></p>
+
+            <label class="flex items-center justify-between mb-4 cursor-pointer">
+                <span class="text-sm font-bold text-white/70">Sound effects</span>
+                <input id="soundToggle" type="checkbox" checked class="w-5 h-5 accent-white">
+            </label>
 
             <label class="flex items-center justify-between mb-6 cursor-pointer">
                 <span class="text-sm font-bold text-white/70">Effects (confetti &amp; zonks)</span>
                 <input id="fxToggle" type="checkbox" checked class="w-5 h-5 accent-white">
             </label>
+
+            <!-- Abandon current game (only meaningful mid-game) -->
+            <button id="resetGame" class="hidden w-full mb-4 bg-red-600/90 hover:bg-red-600 text-white font-black rounded-xl py-3 flex items-center justify-center gap-2 pop-animation">
+                <span class="ms" style="font-size:20px;">restart_alt</span> Abandon &amp; restart
+            </button>
 
             <div class="bg-white/5 rounded-2xl p-4 mb-6 text-sm text-white/60">
                 <p class="font-bold text-white/80 mb-1">The vibe</p>
@@ -222,7 +233,8 @@
         // ---------- Settings (localStorage) ----------
         const SETTINGS_KEY = 'th_challenge_settings';
         const BEST_KEY = 'th_challenge_best';
-        const defaults = { count: 10, fx: true };
+        const SESSION_KEY = 'th_challenge_session';
+        const defaults = { count: 10, fx: true, sound: true };
         let settings = Object.assign({}, defaults, loadJSON(SETTINGS_KEY, {}));
 
         function loadJSON(key, fallback) {
@@ -232,6 +244,27 @@
         function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
         function getBest() { return loadJSON(BEST_KEY, null); }
         function setBest(b) { localStorage.setItem(BEST_KEY, JSON.stringify(b)); }
+
+        // ---------- In-progress game persistence ----------
+        // phase 'question' games are saved so a reload resumes exactly where
+        // you left off. Finished games clear the slot.
+        function saveSession() {
+            if (!game) return;
+            try {
+                localStorage.setItem(SESSION_KEY, JSON.stringify({
+                    v: 1, phase: 'question',
+                    idx: game.idx, score: game.score,
+                    results: game.results, questions: game.questions,
+                }));
+            } catch {}
+        }
+        function clearSession() { try { localStorage.removeItem(SESSION_KEY); } catch {} }
+        function loadSession() {
+            const s = loadJSON(SESSION_KEY, null);
+            if (!s || !Array.isArray(s.questions) || !s.questions.length) return null;
+            if (typeof s.idx !== 'number' || s.idx >= s.questions.length) return null;
+            return s;
+        }
 
         function refreshStartStats() {
             // Start-screen stat chips were removed; best run is still tracked
@@ -314,6 +347,62 @@
         ];
         const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
+        // ---------- Sound engine (Web Audio, synthesized — no assets) ----------
+        const Sound = (() => {
+            let ctx = null;
+            function ensure() {
+                try {
+                    if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
+                    if (ctx && ctx.state === 'suspended') ctx.resume();
+                } catch {}
+                return ctx;
+            }
+            // One note with a soft attack/decay envelope.
+            function note(c, freq, t0, dur, type, peak) {
+                const o = c.createOscillator(), g = c.createGain();
+                o.type = type; o.frequency.setValueAtTime(freq, t0);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.exponentialRampToValueAtTime(peak, t0 + 0.012);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                o.connect(g).connect(c.destination);
+                o.start(t0); o.stop(t0 + dur + 0.03);
+                return o;
+            }
+            // A note that slides between two pitches (for sweeps / sad trombone).
+            function glide(c, f1, f2, t0, dur, type, peak) {
+                const o = c.createOscillator(), g = c.createGain();
+                o.type = type;
+                o.frequency.setValueAtTime(f1, t0);
+                o.frequency.linearRampToValueAtTime(f2, t0 + dur);
+                g.gain.setValueAtTime(0.0001, t0);
+                g.gain.exponentialRampToValueAtTime(peak, t0 + 0.02);
+                g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+                o.connect(g).connect(c.destination);
+                o.start(t0); o.stop(t0 + dur + 0.03);
+            }
+            const seq = (c, t, notes, type, peak) => notes.forEach(([f, off, dur]) => note(c, f, t + off, dur, type, peak));
+            function play(name) {
+                if (!settings.sound) return;
+                const c = ensure(); if (!c) return;
+                const t = c.currentTime + 0.001;
+                switch (name) {
+                    case 'tap':     note(c, 320, t, 0.06, 'triangle', 0.12); break;
+                    case 'ui':      note(c, 480, t, 0.07, 'square', 0.06); break;
+                    case 'continue':note(c, 560, t, 0.08, 'sine', 0.12); note(c, 740, t + 0.05, 0.1, 'sine', 0.1); break;
+                    case 'select':  note(c, 660, t, 0.05, 'square', 0.08); break;
+                    case 'correct': seq(c, t, [[523,0,0.12],[659,0.09,0.12],[784,0.18,0.22]], 'triangle', 0.16); break;
+                    case 'wrong':   glide(c, 240, 120, t, 0.42, 'sawtooth', 0.16); note(c, 120, t + 0.18, 0.28, 'square', 0.08); break;
+                    case 'swap':    glide(c, 380, 760, t, 0.18, 'sine', 0.12); break;
+                    case 'unlock':  note(c, 880, t, 0.06, 'square', 0.12); note(c, 1320, t + 0.05, 0.1, 'sine', 0.1); break;
+                    case 'start':   seq(c, t, [[392,0,0.1],[523,0.1,0.1],[659,0.2,0.1],[784,0.3,0.26]], 'triangle', 0.15); break;
+                    case 'win':     seq(c, t, [[523,0,0.14],[659,0.13,0.14],[784,0.26,0.14],[1046,0.39,0.34]], 'triangle', 0.17); break;
+                    case 'perfect': seq(c, t, [[523,0,0.12],[659,0.1,0.12],[784,0.2,0.12],[1046,0.3,0.12],[1318,0.4,0.12],[1568,0.5,0.4]], 'triangle', 0.16); break;
+                    case 'lose':    glide(c, 392, 311, t, 0.3, 'sawtooth', 0.14); glide(c, 311, 233, t + 0.28, 0.5, 'sawtooth', 0.14); break;
+                }
+            }
+            return { play, ensure };
+        })();
+
         // ---------- Game state ----------
         let game = null;
         let busy = false;
@@ -346,6 +435,8 @@
 
         async function startGame() {
             hideHost(true);
+            clearSession();
+            Sound.ensure(); Sound.play('start');
             show('loading');
             el('loadingQuip').textContent = pick(loadingQuips);
             const quipTimer = setInterval(() => { el('loadingQuip').textContent = pick(loadingQuips); }, 1800);
@@ -366,6 +457,7 @@
             openingProgress();
         }
         function openingProgress() {
+            saveSession();
             el('progressKicker').textContent = 'The challenge';
             el('progressTitle').textContent = `Unlock all ${game.questions.length} to win`;
             el('progressHost').textContent = pick(introLines);
@@ -398,6 +490,7 @@
         }
         function showProgress(animateIndex, next) {
             buildLocks(animateIndex);
+            if (animateIndex >= 0) Sound.play('unlock');
             show('progress');
             const node = el('progressScreen');
             let advanced = false;
@@ -427,6 +520,7 @@
         // ---------- Render a question ----------
         function renderQuestion() {
             busy = false;
+            saveSession();
             const q = game.questions[game.idx];
             updateTracker();
             const card = el('questionCard');
@@ -462,6 +556,7 @@
             game.results[game.idx] = isRight ? 'right' : 'wrong';
             if (isRight) game.score++;
             updateTracker();
+            Sound.play(isRight ? 'correct' : 'wrong');
 
             const justAnswered = game.idx;
             const isLast = justAnswered === game.questions.length - 1;
@@ -492,6 +587,7 @@
         async function swapQuestion() {
             if (busy || swapping) return;
             swapping = true;
+            Sound.play('ui');
             const swapBtn = el('swapBtn');
             swapBtn.innerHTML = '<span class="ms anim-spin" style="font-size:16px;">cached</span> swapping…';
             const avoid = game.questions.map((q) => q.question);
@@ -504,6 +600,7 @@
                 const cand = FALLBACK_BANK.find((q) => !used.has(q.question));
                 if (cand) { game.questions[game.idx] = normalize(cand); showHost("Here's another from the backup pile.", 'good'); }
             } finally {
+                Sound.play('swap');
                 swapBtn.innerHTML = '<span class="ms" style="font-size:16px;">cached</span> swap';
                 swapping = false;
                 renderQuestion();
@@ -513,6 +610,7 @@
 
         // ---------- End ----------
         function endGame() {
+            clearSession();
             const total = game.questions.length, score = game.score;
             const perfect = score === total, won = score > total / 2;
             const best = getBest(), ratio = score / total;
@@ -532,6 +630,7 @@
             if (score >= 7 && !perfect) addBadge('Sharp');
 
             show('end');
+            Sound.play(perfect ? 'perfect' : won ? 'win' : 'lose');
             if (settings.fx && won) celebrate(perfect);
         }
 
@@ -571,7 +670,7 @@
                 // Blocking: stays until the user taps Continue.
                 el('hostToastNextLabel').textContent = opts.nextLabel || 'Continue';
                 next.classList.remove('hidden');
-                next.onclick = opts.onNext;
+                next.onclick = () => { Sound.play('continue'); opts.onNext(); };
                 t.classList.remove('pointer-events-none');
             } else {
                 // Transient confirmation (e.g. swap): auto-dismisses.
@@ -594,24 +693,80 @@
         }
 
         // ---------- Settings modal ----------
+        const gameInProgress = () => !!(game && game.idx < game.questions.length);
+
+        function updateCountHint() {
+            const hint = el('countHint');
+            if (gameInProgress()) {
+                const cur = game.questions.length, diff = settings.count - cur;
+                if (diff > 0) hint.textContent = `Adds ${diff} more to your current game on close.`;
+                else if (diff < 0) hint.textContent = `Current game keeps its ${cur}; new size starts next game.`;
+                else hint.textContent = '';
+            } else {
+                hint.textContent = 'Applies to your next game.';
+            }
+        }
         function openSettings() {
+            Sound.play('ui');
             el('countRange').value = settings.count;
             el('countVal').textContent = settings.count;
             el('fxToggle').checked = settings.fx;
+            el('soundToggle').checked = settings.sound;
+            el('resetGame').classList.toggle('hidden', !gameInProgress());
+            updateCountHint();
             el('settingsModal').classList.remove('hidden');
             document.body.classList.add('no-scroll');
         }
         function closeSettings() {
             el('settingsModal').classList.add('hidden');
             document.body.classList.remove('no-scroll');
+            // Grow the active game if the player bumped the count up mid-game.
+            if (gameInProgress() && settings.count > game.questions.length) {
+                extendGame(settings.count - game.questions.length);
+            }
             refreshStartStats();
         }
+
+        // Append more questions to the active game without disturbing progress.
+        let extending = false;
+        async function extendGame(n) {
+            if (extending || !gameInProgress()) return;
+            extending = true;
+            const target = game.questions.length + n;
+            showHost(`Wranglin' up ${n} more…`, 'good', { duration: 4000 });
+            const avoid = game.questions.map((q) => q.question);
+            try {
+                const fresh = await fetchQuestions(Math.min(n, 20), avoid);
+                fresh.forEach((q) => { if (game.questions.length < target) game.questions.push(normalize(q)); });
+            } catch (err) {
+                const used = new Set(game.questions.map((q) => q.question));
+                for (const c of shuffle(FALLBACK_BANK)) {
+                    if (game.questions.length >= target) break;
+                    if (!used.has(c.question)) { game.questions.push(normalize(c)); used.add(c.question); }
+                }
+            }
+            updateTracker();
+            saveSession();
+            Sound.play('unlock');
+            showHost(`Game's now ${game.questions.length} questions. Keep going!`, 'good', { duration: 2600 });
+            extending = false;
+        }
+
         el('settingsBtn').onclick = openSettings;
         el('settingsLink').onclick = openSettings;
-        el('closeSettings').onclick = closeSettings;
+        el('closeSettings').onclick = () => { Sound.play('ui'); closeSettings(); };
         el('settingsModal').addEventListener('click', (e) => { if (e.target === el('settingsModal')) closeSettings(); });
-        el('countRange').addEventListener('input', (e) => { settings.count = parseInt(e.target.value, 10); el('countVal').textContent = settings.count; saveSettings(); });
+        el('countRange').addEventListener('input', (e) => { settings.count = parseInt(e.target.value, 10); el('countVal').textContent = settings.count; saveSettings(); updateCountHint(); });
         el('fxToggle').addEventListener('change', (e) => { settings.fx = e.target.checked; saveSettings(); });
+        el('soundToggle').addEventListener('change', (e) => { settings.sound = e.target.checked; saveSettings(); if (settings.sound) Sound.play('ui'); });
+        el('resetGame').onclick = () => {
+            Sound.play('ui');
+            clearSession();
+            game = null;
+            hideHost(true);
+            closeSettings();
+            show('start');
+        };
         el('resetBest').onclick = () => {
             localStorage.removeItem(BEST_KEY); refreshStartStats();
             el('resetBest').textContent = 'Cleared!';
@@ -625,7 +780,16 @@
 
         // ---------- Init ----------
         refreshStartStats();
-        show('start');
+        document.addEventListener('pointerdown', () => Sound.ensure(), { once: true });
+        const resumed = loadSession();
+        if (resumed) {
+            game = { questions: resumed.questions, idx: resumed.idx, score: resumed.score || 0, results: resumed.results || [] };
+            show('game');
+            renderQuestion();
+            showHost('Welcome back! Right where you left off.', 'good', { duration: 2800 });
+        } else {
+            show('start');
+        }
 
         // ===================== Fallback question bank =====================
         const FALLBACK_BANK = [
