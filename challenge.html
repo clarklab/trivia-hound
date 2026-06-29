@@ -88,8 +88,14 @@
         <section id="startScreen" class="flex-1 min-h-0 flex-col items-center justify-center text-center">
             <div class="anim-bob mb-3"><span class="ms fill" style="font-size:84px;">indeterminate_question_box</span></div>
             <h2 class="text-4xl font-black leading-none mb-3">The Trivia<br>Challenge</h2>
-            <p class="text-white/70 max-w-xs mb-1">Birds, '90s movies, music, animals &amp; Texas. Medium heat.</p>
-            <p class="text-white/40 text-sm mb-8">Walk &amp; play. Unlock them all to win.</p>
+            <p class="text-white/70 max-w-xs mb-5">Pick your own subject, or take the house mix. Medium heat — walk &amp; play.</p>
+
+            <div class="w-full max-w-xs mb-6">
+                <input id="topicInput" type="text" inputmode="text" autocomplete="off" autocapitalize="sentences" maxlength="160"
+                    placeholder="Trivia about… (anything!)"
+                    class="select-text w-full bg-white/10 border-2 border-white/15 focus:border-white/60 focus:outline-none rounded-2xl px-4 py-3.5 text-center text-base font-bold placeholder:text-white/40 placeholder:font-normal">
+                <p class="text-white/40 text-xs mt-2 leading-snug">Try “the movie Jaws” or “Texas birds.” Leave blank for birds, '90s movies, music, animals &amp; Texas.</p>
+            </div>
 
             <button id="startBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs shadow-lg shadow-white/10 flex items-center justify-center gap-2">
                 <span class="ms fill" style="font-size:22px;">play_arrow</span> Let's Go!
@@ -203,7 +209,7 @@
 
             <div class="bg-white/5 rounded-2xl p-4 mb-6 text-sm text-white/60">
                 <p class="font-bold text-white/80 mb-1">The vibe</p>
-                Medium-difficulty trivia on birds, '90s movies, music, animals, and Texas pop culture — fresh questions generated every game.
+                Medium-difficulty trivia, fresh every game. Type your own subject on the home screen — a movie, a band, a town, anything — or leave it blank for the house mix of birds, '90s movies, music, animals, and Texas.
             </div>
 
             <button id="resetBest" class="text-white/40 text-xs underline">Reset best run</button>
@@ -255,6 +261,7 @@
                     v: 1, phase: 'question',
                     idx: game.idx, score: game.score,
                     results: game.results, questions: game.questions,
+                    topic: game.topic || '',
                 }));
             } catch {}
         }
@@ -363,6 +370,13 @@
             "Dusting off the Texas trivia.",
             "Warming up the confetti cannon.",
         ];
+        const topicQuips = [
+            "Going deep on your subject.",
+            "Researching your topic.",
+            "Digging up the good stuff.",
+            "Consulting the experts.",
+            "Writing questions just for you.",
+        ];
         const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
         // ---------- Sound engine (Web Audio, synthesized — no assets) ----------
@@ -426,11 +440,11 @@
         let busy = false;
 
         // ---------- Question generation ----------
-        async function fetchQuestions(count, avoid, avoidCategory) {
+        async function fetchQuestions(count, avoid, avoidCategory, topic) {
             const res = await fetch('/api/questions', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null }),
+                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null, topic: topic || null }),
             });
             if (!res.ok) throw new Error('gen failed ' + res.status);
             const data = await res.json();
@@ -455,19 +469,30 @@
             hideHost(true);
             clearSession();
             Sound.ensure(); Sound.play('start');
+            const topic = (el('topicInput') ? el('topicInput').value : '').trim().slice(0, 160);
             show('loading');
-            el('loadingQuip').textContent = pick(loadingQuips);
-            const quipTimer = setInterval(() => { el('loadingQuip').textContent = pick(loadingQuips); }, 1800);
+            const setQuip = () => { el('loadingQuip').textContent = pick(topic ? topicQuips : loadingQuips); };
+            setQuip();
+            const quipTimer = setInterval(setQuip, 1800);
             try {
-                const raw = await fetchQuestions(settings.count, getRecent());
+                const raw = await fetchQuestions(settings.count, getRecent(), null, topic || null);
                 clearInterval(quipTimer);
-                game = { questions: raw.map(normalize), idx: 0, score: 0, results: [] };
+                game = { questions: raw.map(normalize), idx: 0, score: 0, results: [], topic };
                 pushRecent(game.questions);
                 openingProgress();
             } catch (err) {
                 clearInterval(quipTimer);
-                useFallback(err);
+                // The static fallback bank only covers the house topics, so a
+                // failed custom-topic game sends the player back to retry.
+                if (topic) topicError(topic, err);
+                else useFallback(err);
             }
+        }
+        function topicError(topic, err) {
+            console.warn('Custom-topic generation failed:', err);
+            game = null;
+            show('start');
+            showHost(`Couldn't wrangle up "${topic}" trivia right now. Try again, or tweak the wording.`, 'bad', { duration: 4500 });
         }
         function useFallback(err) {
             console.warn('Falling back to local questions:', err);
@@ -476,13 +501,13 @@
             let pool = FALLBACK_BANK.filter((q) => !recent.has(q.question));
             if (pool.length < settings.count) pool = FALLBACK_BANK.slice();
             const bank = shuffle(pool).slice(0, settings.count);
-            game = { questions: bank.map(normalize), idx: 0, score: 0, results: [] };
+            game = { questions: bank.map(normalize), idx: 0, score: 0, results: [], topic: '' };
             pushRecent(game.questions);
             openingProgress();
         }
         function openingProgress() {
             saveSession();
-            el('progressKicker').textContent = 'The challenge';
+            el('progressKicker').textContent = game.topic ? game.topic : 'The challenge';
             el('progressTitle').textContent = `Unlock all ${game.questions.length} to win`;
             el('progressHost').textContent = pick(introLines);
             showProgress(-1, () => { show('game'); renderQuestion(); });
@@ -614,19 +639,26 @@
             Sound.play('ui');
             const swapBtn = el('swapBtn');
             swapBtn.innerHTML = '<span class="ms anim-spin" style="font-size:16px;">cached</span> swapping…';
+            const topic = game.topic || '';
             const currentCategory = game.questions[game.idx].category;
             const avoid = game.questions.map((q) => q.question).concat(getRecent());
             try {
-                // Pull a brand-new question from a different category.
-                const [fresh] = await fetchQuestions(1, avoid, currentCategory);
+                // Custom topic: a fresh question on the same subject. House mix:
+                // a brand-new question from a different category.
+                const [fresh] = await fetchQuestions(1, avoid, topic ? null : currentCategory, topic || null);
                 game.questions[game.idx] = normalize(fresh);
                 pushRecent([fresh]);
-                showHost(`New category: ${fresh.category}!`, 'good');
+                showHost(topic ? 'Fresh one, same topic!' : `New category: ${fresh.category}!`, 'good');
             } catch (err) {
-                const used = new Set(game.questions.map((q) => q.question));
-                const cand = FALLBACK_BANK.find((q) => !used.has(q.question) && q.category !== currentCategory)
-                    || FALLBACK_BANK.find((q) => !used.has(q.question));
-                if (cand) { game.questions[game.idx] = normalize(cand); showHost(`Here's a ${cand.category} one from the backup pile.`, 'good'); }
+                if (topic) {
+                    // No static bank for custom topics — keep the current question.
+                    showHost("Couldn't grab another one. Keeping this question.", 'bad');
+                } else {
+                    const used = new Set(game.questions.map((q) => q.question));
+                    const cand = FALLBACK_BANK.find((q) => !used.has(q.question) && q.category !== currentCategory)
+                        || FALLBACK_BANK.find((q) => !used.has(q.question));
+                    if (cand) { game.questions[game.idx] = normalize(cand); showHost(`Here's a ${cand.category} one from the backup pile.`, 'good'); }
+                }
             } finally {
                 Sound.play('swap');
                 swapBtn.innerHTML = '<span class="ms" style="font-size:16px;">cached</span> swap';
@@ -760,24 +792,29 @@
         async function extendGame(n) {
             if (extending || !gameInProgress()) return;
             extending = true;
+            const topic = game.topic || '';
             const target = game.questions.length + n;
             showHost(`Wranglin' up ${n} more…`, 'good', { duration: 4000 });
             const avoid = game.questions.map((q) => q.question).concat(getRecent());
             try {
-                const fresh = await fetchQuestions(Math.min(n, 20), avoid);
+                const fresh = await fetchQuestions(Math.min(n, 20), avoid, null, topic || null);
                 fresh.forEach((q) => { if (game.questions.length < target) game.questions.push(normalize(q)); });
                 pushRecent(fresh);
             } catch (err) {
-                const used = new Set(game.questions.map((q) => q.question));
-                for (const c of shuffle(FALLBACK_BANK)) {
-                    if (game.questions.length >= target) break;
-                    if (!used.has(c.question)) { game.questions.push(normalize(c)); used.add(c.question); }
+                // Custom topics have no static bank to top up from.
+                if (!topic) {
+                    const used = new Set(game.questions.map((q) => q.question));
+                    for (const c of shuffle(FALLBACK_BANK)) {
+                        if (game.questions.length >= target) break;
+                        if (!used.has(c.question)) { game.questions.push(normalize(c)); used.add(c.question); }
+                    }
                 }
             }
             updateTracker();
             saveSession();
             Sound.play('unlock');
-            showHost(`Game's now ${game.questions.length} questions. Keep going!`, 'good', { duration: 2600 });
+            const grew = game.questions.length >= target;
+            showHost(grew ? `Game's now ${game.questions.length} questions. Keep going!` : "Couldn't add more right now — carry on!", grew ? 'good' : 'bad', { duration: 2600 });
             extending = false;
         }
 
@@ -806,13 +843,17 @@
         el('startBtn').onclick = startGame;
         el('playAgainBtn').onclick = startGame;
         el('swapBtn').onclick = swapQuestion;
+        // Enter in the topic box kicks off the game.
+        el('topicInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); el('topicInput').blur(); startGame(); }
+        });
 
         // ---------- Init ----------
         refreshStartStats();
         document.addEventListener('pointerdown', () => Sound.ensure(), { once: true });
         const resumed = loadSession();
         if (resumed) {
-            game = { questions: resumed.questions, idx: resumed.idx, score: resumed.score || 0, results: resumed.results || [] };
+            game = { questions: resumed.questions, idx: resumed.idx, score: resumed.score || 0, results: resumed.results || [], topic: resumed.topic || '' };
             show('game');
             renderQuestion();
             showHost('Welcome back! Right where you left off.', 'good', { duration: 2800 });
