@@ -9,11 +9,31 @@ const MODEL = "claude-sonnet-4-6";
 
 const CATEGORIES = ["Birds", "90s Movies", "Music", "Animals", "Texas"];
 
-const SYSTEM_PROMPT = `You write trivia questions for "Trivia Hound", a fun, fast mobile trivia game.
+// Player-selectable difficulty. The `line` for each level is dropped straight
+// into the system prompt's "Difficulty:" instruction, and reads naturally in
+// both the house-mix and custom-topic prompts.
+const DIFFICULTY = {
+  easy: {
+    line: `EASY. Keep it friendly and approachable — the kind of question a casual fan gets right most of the time. Stick to clear, well-known facts and skip obscure deep cuts. Players should breeze through most of these and still have fun.`,
+  },
+  medium: {
+    line: `MEDIUM-HARD. Make players think — the kind that earns an "ooh, good one," not an eye-roll. Avoid the obvious gimme. Reach for a specific detail, a deeper cut, a supporting character, the lesser-known fact. A trivia regular should get maybe half on instinct and have to genuinely work for the rest.`,
+  },
+  hard: {
+    line: `HARD. Bring the heat — this is for serious buffs. Reach for deep cuts, obscure details, precise dates and names, lesser-known facts and surprising connections. No gimmes. Expect even a sharp player to miss several and have to really dig for the rest.`,
+  },
+};
+function difficultyOf(key) {
+  return DIFFICULTY[key] || DIFFICULTY.medium;
+}
+
+function buildDefaultSystemPrompt(difficulty) {
+  const diff = difficultyOf(difficulty);
+  return `You write trivia questions for "Trivia Hound", a fun, fast mobile trivia game.
 
 Audience & vibe: think a sharp, fun 40-something woman crushing it at girls' trivia night — the stuff she knows cold. Keep it warm, playful, and pop-culture-literate. Never mean, never NSFW, never political hot-takes.
 
-Difficulty: MEDIUM-HARD. These should make her think — the kind that earns a "ooh, good one" not an eye-roll. Avoid the obvious gimme. Reach for a specific detail, a deeper cut, a second-album-track, a supporting character, the lesser-known fact. A trivia regular should get maybe half on instinct and have to genuinely work for the rest.
+Difficulty: ${diff.line}
 
 AVOID these overused chestnuts (and anything this easy/cliché): "only bird that can fly backwards" (hummingbird), "a "murder" of crows", "I'll never let go, Jack", Clueless "As if", the Macarena, "Wannabe / zig-a-zig-ah", lions = "pride", blue whale heart = a car, Austin = "Live Music Capital", Beyoncé is from Houston. Do not reuse these or their close cousins.
 
@@ -32,6 +52,7 @@ Rules for every question:
 - Every question in a set must be distinct — no two on the same fact, person, or work.
 
 Return ONLY valid minified JSON. No markdown, no code fences, no commentary.`;
+}
 
 function buildUserPrompt(count, avoid, avoidCategory) {
   const avoidBlock =
@@ -65,7 +86,8 @@ Spread the questions across the different topics. Return ONLY the JSON array.${c
 // "90s hip-hop"), we drop the fixed five categories and build the whole set
 // around their request instead.
 
-function buildTopicSystemPrompt(topic) {
+function buildTopicSystemPrompt(topic, difficulty) {
+  const diff = difficultyOf(difficulty);
   return `You write trivia questions for "Trivia Hound", a fun, fast mobile trivia game.
 
 The player picked their OWN subject. Every single question must be about:
@@ -73,7 +95,7 @@ The player picked their OWN subject. Every single question must be about:
 
 Audience & vibe: warm, playful, smart — like the host of a great pub quiz. Never mean, never NSFW, never political hot-takes.
 
-Difficulty: MEDIUM-HARD. Make a real fan of this subject think. Reach for specific details, deeper cuts, the supporting character, the second single, the behind-the-scenes fact — not the most obvious gimme. A knowledgeable player should get maybe half on instinct and have to genuinely work for the rest.
+Difficulty: ${diff.line}
 
 Interpreting the subject:
 - Stay tightly on-topic. Every question must clearly belong to this subject — no drifting to loosely related things.
@@ -195,6 +217,11 @@ export default async (req) => {
   // around it instead of the fixed five categories.
   const topicRaw = typeof body.topic === "string" ? body.topic.trim() : "";
   const topic = topicRaw ? topicRaw.slice(0, 160) : null;
+  // Player-selected difficulty (easy | medium | hard); defaults to medium.
+  const difficulty =
+    typeof body.difficulty === "string" && DIFFICULTY[body.difficulty]
+      ? body.difficulty
+      : "medium";
 
   const baseUrl = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(
     /\/+$/,
@@ -223,7 +250,9 @@ export default async (req) => {
         model: MODEL,
         max_tokens: 3200,
         temperature: 1,
-        system: topic ? buildTopicSystemPrompt(topic) : SYSTEM_PROMPT,
+        system: topic
+          ? buildTopicSystemPrompt(topic, difficulty)
+          : buildDefaultSystemPrompt(difficulty),
         messages: [
           {
             role: "user",

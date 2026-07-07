@@ -95,6 +95,18 @@
                     placeholder="Trivia about… (anything!)"
                     class="select-text w-full bg-white/10 border-2 border-white/15 focus:border-white/60 focus:outline-none rounded-2xl px-4 py-3.5 text-center text-base font-bold placeholder:text-white/40 placeholder:font-normal">
                 <p class="text-white/40 text-xs mt-2 leading-snug">Try “the movie Jaws” or “Texas birds.” Leave blank for birds, '90s movies, music, animals &amp; Texas.</p>
+
+                <!-- Expands when the topic box is focused: pick the heat level. -->
+                <div id="topicExtra" class="grid overflow-hidden transition-all duration-300 ease-out" style="grid-template-rows:0fr;opacity:0;">
+                    <div class="min-h-0">
+                        <p class="text-white/50 text-[0.7rem] font-bold uppercase tracking-[0.15em] mt-4 mb-2">Difficulty</p>
+                        <div id="difficultyPicker" class="grid grid-cols-3 gap-2">
+                            <button type="button" data-diff="easy"   class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Easy</button>
+                            <button type="button" data-diff="medium" class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Medium</button>
+                            <button type="button" data-diff="hard"   class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Hard</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <button id="startBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs shadow-lg shadow-white/10 flex items-center justify-center gap-2">
@@ -209,7 +221,7 @@
 
             <div class="bg-white/5 rounded-2xl p-4 mb-6 text-sm text-white/60">
                 <p class="font-bold text-white/80 mb-1">The vibe</p>
-                Medium-difficulty trivia, fresh every game. Type your own subject on the home screen — a movie, a band, a town, anything — or leave it blank for the house mix of birds, '90s movies, music, animals, and Texas.
+                Fresh questions every game, at the difficulty you pick. Type your own subject on the home screen — a movie, a band, a town, anything — or leave it blank for the house mix of birds, '90s movies, music, animals, and Texas.
             </div>
 
             <button id="resetBest" class="text-white/40 text-xs underline">Reset best run</button>
@@ -240,7 +252,7 @@
         const SETTINGS_KEY = 'th_challenge_settings';
         const BEST_KEY = 'th_challenge_best';
         const SESSION_KEY = 'th_challenge_session';
-        const defaults = { count: 10, fx: true, sound: true };
+        const defaults = { count: 10, fx: true, sound: true, difficulty: 'medium' };
         let settings = Object.assign({}, defaults, loadJSON(SETTINGS_KEY, {}));
 
         function loadJSON(key, fallback) {
@@ -444,7 +456,7 @@
             const res = await fetch('/api/questions', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null, topic: topic || null }),
+                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null, topic: topic || null, difficulty: settings.difficulty || 'medium' }),
             });
             if (!res.ok) throw new Error('gen failed ' + res.status);
             const data = await res.json();
@@ -847,6 +859,37 @@
         el('topicInput').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); el('topicInput').blur(); startGame(); }
         });
+
+        // ---------- Topic box expansion + difficulty picker ----------
+        // Focusing/clicking the topic box reveals the difficulty options, which
+        // ride along with every generation request (see fetchQuestions).
+        let topicExpanded = false;
+        function expandTopicExtra() {
+            if (topicExpanded) return;
+            topicExpanded = true;
+            const box = el('topicExtra');
+            box.style.gridTemplateRows = '1fr';
+            box.style.opacity = '1';
+        }
+        el('topicInput').addEventListener('focus', expandTopicExtra);
+        el('topicInput').addEventListener('click', expandTopicExtra);
+
+        function renderDifficulty() {
+            document.querySelectorAll('.diff-btn').forEach((b) => {
+                const on = b.dataset.diff === settings.difficulty;
+                b.className = 'diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 ' +
+                    (on ? 'bg-white text-black border-white' : 'bg-white/10 text-white/70 border-transparent');
+            });
+        }
+        document.querySelectorAll('.diff-btn').forEach((b) => {
+            b.addEventListener('click', () => {
+                settings.difficulty = b.dataset.diff;
+                saveSettings();
+                renderDifficulty();
+                Sound.play('ui');
+            });
+        });
+        renderDifficulty();
 
         // ---------- Init ----------
         refreshStartStats();
