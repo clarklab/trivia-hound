@@ -95,6 +95,18 @@
                     placeholder="Trivia about… (anything!)"
                     class="select-text w-full bg-white/10 border-2 border-white/15 focus:border-white/60 focus:outline-none rounded-2xl px-4 py-3.5 text-center text-base font-bold placeholder:text-white/40 placeholder:font-normal">
                 <p class="text-white/40 text-xs mt-2 leading-snug">Try “the movie Jaws” or “Texas birds.” Leave blank for birds, '90s movies, music, animals &amp; Texas.</p>
+
+                <!-- Expands when the topic box is focused: pick the heat level. -->
+                <div id="topicExtra" class="grid overflow-hidden transition-all duration-300 ease-out" style="grid-template-rows:0fr;opacity:0;">
+                    <div class="min-h-0">
+                        <p class="text-white/50 text-[0.7rem] font-bold uppercase tracking-[0.15em] mt-4 mb-2">Difficulty</p>
+                        <div id="difficultyPicker" class="grid grid-cols-3 gap-2">
+                            <button type="button" data-diff="easy"   class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Easy</button>
+                            <button type="button" data-diff="medium" class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Medium</button>
+                            <button type="button" data-diff="hard"   class="diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 border-transparent bg-white/10 text-white/70">Hard</button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <button id="startBtn" class="bg-white text-black font-black text-lg px-10 py-4 rounded-full pop-animation w-full max-w-xs shadow-lg shadow-white/10 flex items-center justify-center gap-2">
@@ -192,6 +204,13 @@
             </div>
             <p id="countHint" class="text-xs text-white/40 mb-6 h-4"></p>
 
+            <label class="block mb-2 text-sm font-bold text-white/70">Head Start</label>
+            <div class="flex items-center gap-4 mb-2">
+                <input id="headStartRange" type="range" min="0" max="0" step="1" value="0" class="flex-grow accent-white disabled:opacity-40">
+                <span id="headStartVal" class="text-3xl font-black w-12 text-right">0</span>
+            </div>
+            <p id="headStartHint" class="text-xs text-white/40 mb-6 min-h-4"></p>
+
             <label class="flex items-center justify-between mb-4 cursor-pointer">
                 <span class="text-sm font-bold text-white/70">Sound effects</span>
                 <input id="soundToggle" type="checkbox" checked class="w-5 h-5 accent-white">
@@ -209,7 +228,7 @@
 
             <div class="bg-white/5 rounded-2xl p-4 mb-6 text-sm text-white/60">
                 <p class="font-bold text-white/80 mb-1">The vibe</p>
-                Medium-difficulty trivia, fresh every game. Type your own subject on the home screen — a movie, a band, a town, anything — or leave it blank for the house mix of birds, '90s movies, music, animals, and Texas.
+                Fresh questions every game, at the difficulty you pick. Type your own subject on the home screen — a movie, a band, a town, anything — or leave it blank for the house mix of birds, '90s movies, music, animals, and Texas.
             </div>
 
             <button id="resetBest" class="text-white/40 text-xs underline">Reset best run</button>
@@ -240,7 +259,7 @@
         const SETTINGS_KEY = 'th_challenge_settings';
         const BEST_KEY = 'th_challenge_best';
         const SESSION_KEY = 'th_challenge_session';
-        const defaults = { count: 10, fx: true, sound: true };
+        const defaults = { count: 10, fx: true, sound: true, difficulty: 'medium', headStart: 0 };
         let settings = Object.assign({}, defaults, loadJSON(SETTINGS_KEY, {}));
 
         function loadJSON(key, fallback) {
@@ -250,6 +269,19 @@
         function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
         function getBest() { return loadJSON(BEST_KEY, null); }
         function setBest(b) { localStorage.setItem(BEST_KEY, JSON.stringify(b)); }
+
+        // ---------- Head Start credits ----------
+        // The correct answers you *earn* in a game (freebies excluded) are
+        // banked here. A future game can carry some back in as pre-unlocked
+        // locks — see the Head Start control in Settings.
+        const CREDITS_KEY = 'th_challenge_credits';
+        function getCredits() { const c = loadJSON(CREDITS_KEY, 0); return (typeof c === 'number' && c > 0) ? Math.floor(c) : 0; }
+        function setCredits(n) { try { localStorage.setItem(CREDITS_KEY, JSON.stringify(Math.max(0, Math.floor(n || 0)))); } catch {} }
+        // How big a head start the next game will actually get, clamped to what
+        // you've banked and always leaving at least one real question to play.
+        function plannedHeadStart() {
+            return Math.max(0, Math.min(parseInt(settings.headStart, 10) || 0, getCredits(), settings.count - 1));
+        }
 
         // ---------- In-progress game persistence ----------
         // phase 'question' games are saved so a reload resumes exactly where
@@ -261,7 +293,7 @@
                     v: 1, phase: 'question',
                     idx: game.idx, score: game.score,
                     results: game.results, questions: game.questions,
-                    topic: game.topic || '',
+                    topic: game.topic || '', headStart: game.headStart || 0,
                 }));
             } catch {}
         }
@@ -444,7 +476,7 @@
             const res = await fetch('/api/questions', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null, topic: topic || null }),
+                body: JSON.stringify({ count, avoid: avoid || [], avoidCategory: avoidCategory || null, topic: topic || null, difficulty: settings.difficulty || 'medium' }),
             });
             if (!res.ok) throw new Error('gen failed ' + res.status);
             const data = await res.json();
@@ -465,6 +497,22 @@
             return { category: q.category, question: q.question, answers: shuffle(q.answers), correctText, fact: q.fact || '' };
         }
 
+        // A pre-unlocked "head start" lock. It occupies a slot in the game (so
+        // the locks/tracker/total all line up) but is never rendered — play
+        // begins at the first real question.
+        function creditPlaceholder() {
+            return { category: 'Head Start', question: '', answers: [], correctText: '', fact: '', credit: true };
+        }
+        // Assemble a game from freshly normalized questions, prepending `hs`
+        // already-correct head-start locks. idx/score start past the freebies.
+        function buildGame(realQuestions, topic, hs) {
+            const headStart = Math.max(0, Math.min(hs || 0, realQuestions.length ? settings.count - 1 : 0));
+            const questions = [], results = [];
+            for (let i = 0; i < headStart; i++) { questions.push(creditPlaceholder()); results.push('right'); }
+            realQuestions.forEach((q) => questions.push(q));
+            return { questions, idx: headStart, score: headStart, results, topic: topic || '', headStart };
+        }
+
         async function startGame() {
             hideHost(true);
             clearSession();
@@ -474,10 +522,12 @@
             const setQuip = () => { el('loadingQuip').textContent = pick(topic ? topicQuips : loadingQuips); };
             setQuip();
             const quipTimer = setInterval(setQuip, 1800);
+            const headStart = plannedHeadStart();
+            const need = settings.count - headStart;
             try {
-                const raw = await fetchQuestions(settings.count, getRecent(), null, topic || null);
+                const raw = await fetchQuestions(need, getRecent(), null, topic || null);
                 clearInterval(quipTimer);
-                game = { questions: raw.map(normalize), idx: 0, score: 0, results: [], topic };
+                game = buildGame(raw.map(normalize), topic, headStart);
                 pushRecent(game.questions);
                 openingProgress();
             } catch (err) {
@@ -496,12 +546,14 @@
         }
         function useFallback(err) {
             console.warn('Falling back to local questions:', err);
+            const headStart = plannedHeadStart();
+            const need = settings.count - headStart;
             const recent = new Set(getRecent());
             // Prefer questions not seen recently; fall back to the full bank.
             let pool = FALLBACK_BANK.filter((q) => !recent.has(q.question));
-            if (pool.length < settings.count) pool = FALLBACK_BANK.slice();
-            const bank = shuffle(pool).slice(0, settings.count);
-            game = { questions: bank.map(normalize), idx: 0, score: 0, results: [], topic: '' };
+            if (pool.length < need) pool = FALLBACK_BANK.slice();
+            const bank = shuffle(pool).slice(0, need);
+            game = buildGame(bank.map(normalize), '', headStart);
             pushRecent(game.questions);
             openingProgress();
         }
@@ -509,7 +561,9 @@
             saveSession();
             el('progressKicker').textContent = game.topic ? game.topic : 'The challenge';
             el('progressTitle').textContent = `Unlock all ${game.questions.length} to win`;
-            el('progressHost').textContent = pick(introLines);
+            el('progressHost').textContent = game.headStart > 0
+                ? `Starting with a ${game.headStart}-lock head start. Don't waste it!`
+                : pick(introLines);
             showProgress(-1, () => { show('game'); renderQuestion(); });
         }
 
@@ -674,7 +728,13 @@
             const total = game.questions.length, score = game.score;
             const perfect = score === total, won = score > total / 2;
             const best = getBest(), ratio = score / total;
-            if (!best || score > best.score || (score === best.score && ratio > best.score / best.total)) setBest({ score, total });
+            // Bank the answers you actually earned this game (freebies excluded)
+            // as Head Start credits for next time.
+            const headStart = game.headStart || 0;
+            setCredits(Math.max(0, score - headStart));
+            // Only unaided runs count toward "best run", so a head start can't
+            // inflate it.
+            if (headStart === 0 && (!best || score > best.score || (score === best.score && ratio > best.score / best.total))) setBest({ score, total });
 
             el('endTotal').textContent = total;
             el('endScore').textContent = score;
@@ -766,6 +826,21 @@
                 hint.textContent = 'Applies to your next game.';
             }
         }
+        // Sync the Head Start slider to banked credits and the current count.
+        function updateHeadStartControls() {
+            const credits = getCredits();
+            const maxHs = Math.max(0, Math.min(credits, settings.count - 1));
+            const range = el('headStartRange');
+            const val = Math.max(0, Math.min(parseInt(settings.headStart, 10) || 0, maxHs));
+            if (val !== settings.headStart) { settings.headStart = val; saveSettings(); }
+            range.max = maxHs;
+            range.value = val;
+            range.disabled = maxHs === 0;
+            el('headStartVal').textContent = val;
+            el('headStartHint').textContent = credits === 0
+                ? 'Finish a game to bank correct answers you can reuse here.'
+                : `You banked ${credits} last game. Carry up to ${maxHs} into your next game as free unlocks.`;
+        }
         function openSettings() {
             Sound.play('ui');
             el('countRange').value = settings.count;
@@ -774,6 +849,7 @@
             el('soundToggle').checked = settings.sound;
             el('resetGame').classList.toggle('hidden', !gameInProgress());
             updateCountHint();
+            updateHeadStartControls();
             el('settingsModal').classList.remove('hidden');
             document.body.classList.add('no-scroll');
         }
@@ -822,7 +898,8 @@
         el('settingsLink').onclick = openSettings;
         el('closeSettings').onclick = () => { Sound.play('ui'); closeSettings(); };
         el('settingsModal').addEventListener('click', (e) => { if (e.target === el('settingsModal')) closeSettings(); });
-        el('countRange').addEventListener('input', (e) => { settings.count = parseInt(e.target.value, 10); el('countVal').textContent = settings.count; saveSettings(); updateCountHint(); });
+        el('countRange').addEventListener('input', (e) => { settings.count = parseInt(e.target.value, 10); el('countVal').textContent = settings.count; saveSettings(); updateCountHint(); updateHeadStartControls(); });
+        el('headStartRange').addEventListener('input', (e) => { settings.headStart = parseInt(e.target.value, 10) || 0; el('headStartVal').textContent = settings.headStart; saveSettings(); });
         el('fxToggle').addEventListener('change', (e) => { settings.fx = e.target.checked; saveSettings(); });
         el('soundToggle').addEventListener('change', (e) => { settings.sound = e.target.checked; saveSettings(); if (settings.sound) Sound.play('ui'); });
         el('resetGame').onclick = () => {
@@ -848,12 +925,43 @@
             if (e.key === 'Enter') { e.preventDefault(); el('topicInput').blur(); startGame(); }
         });
 
+        // ---------- Topic box expansion + difficulty picker ----------
+        // Focusing/clicking the topic box reveals the difficulty options, which
+        // ride along with every generation request (see fetchQuestions).
+        let topicExpanded = false;
+        function expandTopicExtra() {
+            if (topicExpanded) return;
+            topicExpanded = true;
+            const box = el('topicExtra');
+            box.style.gridTemplateRows = '1fr';
+            box.style.opacity = '1';
+        }
+        el('topicInput').addEventListener('focus', expandTopicExtra);
+        el('topicInput').addEventListener('click', expandTopicExtra);
+
+        function renderDifficulty() {
+            document.querySelectorAll('.diff-btn').forEach((b) => {
+                const on = b.dataset.diff === settings.difficulty;
+                b.className = 'diff-btn font-bold text-sm rounded-xl py-2.5 pop-animation border-2 ' +
+                    (on ? 'bg-white text-black border-white' : 'bg-white/10 text-white/70 border-transparent');
+            });
+        }
+        document.querySelectorAll('.diff-btn').forEach((b) => {
+            b.addEventListener('click', () => {
+                settings.difficulty = b.dataset.diff;
+                saveSettings();
+                renderDifficulty();
+                Sound.play('ui');
+            });
+        });
+        renderDifficulty();
+
         // ---------- Init ----------
         refreshStartStats();
         document.addEventListener('pointerdown', () => Sound.ensure(), { once: true });
         const resumed = loadSession();
         if (resumed) {
-            game = { questions: resumed.questions, idx: resumed.idx, score: resumed.score || 0, results: resumed.results || [], topic: resumed.topic || '' };
+            game = { questions: resumed.questions, idx: resumed.idx, score: resumed.score || 0, results: resumed.results || [], topic: resumed.topic || '', headStart: resumed.headStart || 0 };
             show('game');
             renderQuestion();
             showHost('Welcome back! Right where you left off.', 'good', { duration: 2800 });
